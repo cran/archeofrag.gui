@@ -1,0 +1,9 @@
+1787c1f04502195af252e949be7288e5 *DESCRIPTION
+a8fa2cfc463411c68b5e18d9897de5df *NAMESPACE
+6c346d147f1498be3515fbc345906562 *NEWS.md
+0aa20522db5b2ce25330baaa78448da4 *R/app_server.R
+7b61478af3b529ece8030fb966acb0e1 *R/app_ui.R
+d10e22b526b7a4caefee97b5a8224bbf *R/archeofrag.gui.R
+b5ffe115ea931570cd28cf0becd83660 *inst/CITATION
+c01020dc09286d75d7d60a6e33df788f *inst/www/general-idea.png
+f5fb5dd91e5f9204ba85007fe9595495 *man/archeofrag.gui.Rd
