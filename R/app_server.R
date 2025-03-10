@@ -1,59 +1,64 @@
 server <- function(input, output, session) { 
   .data <- NULL  
   value <- NULL
-  
   # parallelize box, count n workers
   output$parallelize.box <- renderUI({
-    checkboxInput("parallelize",
-                  paste0("Parallelize (n workers: ",
-                         foreach::getDoParWorkers(), ")"), value=T)
+    span(`data-toggle` = "tooltip", `data-placement` = "bottom",
+         title = "Enabling parallelization uses half of the available cores to speed up the computation.",
+          checkboxInput("parallelize",
+                        paste0("Parallelize (n workers: ",
+                               foreach::getDoParWorkers(), ")"), value = TRUE)
+    )
   })
   
   # rubish generator
   generate.rubish <- function(){
-      l13 <- archeofrag::frag.simul.process(n.components=24, vertices=70, disturbance=.4)
-      igraph::V(l13)[igraph::V(l13)$layer == 2]$layer <- 3
-      
-      l24 <- archeofrag::frag.simul.process(n.components=20, vertices=44, balance = .7, disturbance=0)
-      igraph::V(l24)[igraph::V(l24)$layer == 1]$layer <- 4
-      igraph::V(l24)$name <- paste0(igraph::V(l24)$name, "l24")
-      
-      l5 <- archeofrag::frag.simul.process(n.components=5, vertices=20)
-      igraph::V(l5)$layer  <- 5
-      igraph::V(l5)$name <- paste0(igraph::V(l5)$name, "l5")
-      
-      l6 <- archeofrag::frag.simul.process(n.components=6, vertices=15)
-      igraph::V(l6)$layer  <- 6
-      igraph::V(l6)$name <- paste0(igraph::V(l6)$name, "l6")
-      
-      # merge
-      g <- igraph::disjoint_union(l13, l24, l5, l6)
-      igraph::graph_attr(g, "frag_type") <- "cr"
-      # archeofrag::frag.graph.plot(g, "layer")
-      
-      # add connection between 1 and 2
-      g <- igraph::add_edges(g, c(rbind(sample(igraph::V(g)[igraph::V(g)$layer == 1], 5, replace = F),
-                                        sample(igraph::V(g)[igraph::V(g)$layer == 2], 5, replace = F))))
-      
-      # add connection between 2 and 3
-      g <- igraph::add_edges(g, c(rbind(sample(igraph::V(g)[igraph::V(g)$layer == 2], 5, replace = TRUE),
-                                        sample(igraph::V(g)[igraph::V(g)$layer == 3], 5, replace = TRUE))))
-      
-      # add connection between 3 and 4
-      g <- igraph::add_edges(g, c(rbind(sample(igraph::V(g)[igraph::V(g)$layer == 3], 10, replace = TRUE),
-                                        sample(igraph::V(g)[igraph::V(g)$layer == 4], 10, replace = TRUE))))
-      
-      # add connection between 4 and 5
-      g <-  igraph::add_edges(g, c(rbind(sample(igraph::V(g)[igraph::V(g)$layer == 4], 2, replace = TRUE),
-                                         sample(igraph::V(g)[igraph::V(g)$layer == 5], 2, replace = TRUE))))
-      
-      # add connection between 4 and 5
-      g <-  igraph::add_edges(g, c(rbind(sample(igraph::V(g)[igraph::V(g)$layer == 5], igraph::gorder(l6), replace = TRUE),
-                                         sample(igraph::V(g)[igraph::V(g)$layer == 6], igraph::gorder(l6), replace = TRUE ))))
-      
-      # extract tables and export
-      list("connection" = igraph::as_edgelist(g), 
-           "fragments" =  data.frame("id" =  igraph::V(g)$name, "layer" =  igraph::V(g)$layer))
+    l13 <- archeofrag::frag.simul.process(n.components=24, vertices=70, disturbance=.4, balance = .6)
+    igraph::V(l13)[igraph::V(l13)$layer == 2]$layer <- 3
+    
+    l24 <- archeofrag::frag.simul.process(n.components=20, vertices=44, balance=.6, disturbance=0)
+    igraph::V(l24)[igraph::V(l24)$layer == 1]$layer <- 4
+    igraph::V(l24)$name <- paste0(igraph::V(l24)$name, "l24")
+    
+    l5 <- archeofrag::frag.simul.process(n.components=5, vertices=20)
+    igraph::V(l5)$layer  <- 5
+    igraph::V(l5)$name <- paste0(igraph::V(l5)$name, "l5")
+    
+    l6 <- archeofrag::frag.simul.process(n.components=6, vertices=15)
+    igraph::V(l6)$layer  <- 6
+    igraph::V(l6)$name <- paste0(igraph::V(l6)$name, "l6")
+    
+    # merge
+    g <- igraph::disjoint_union(l13, l24, l5, l6)
+    igraph::graph_attr(g, "frag_type") <- "cr"
+    
+    # add connection between 1 and 2
+    g <- igraph::add_edges(g, c(rbind(sample(igraph::V(g)[igraph::V(g)$layer == 1], 4, replace = F),
+                                      sample(igraph::V(g)[igraph::V(g)$layer == 2], 4, replace = F))))
+    
+    # add connection between 1 and 3
+    g <- igraph::add_edges(g, c(rbind(sample(igraph::V(g)[igraph::V(g)$layer == 1], 6, replace = F),
+                                      sample(igraph::V(g)[igraph::V(g)$layer == 3], 6, replace = F))))
+    
+    # add connection between 2 and 3
+    g <- igraph::add_edges(g, c(rbind(sample(igraph::V(g)[igraph::V(g)$layer == 2], 5, replace = TRUE),
+                                      sample(igraph::V(g)[igraph::V(g)$layer == 3], 5, replace = TRUE))))
+    
+    # add connection between 3 and 4
+    g <- igraph::add_edges(g, c(rbind(sample(igraph::V(g)[igraph::V(g)$layer == 3], 10, replace = TRUE),
+                                      sample(igraph::V(g)[igraph::V(g)$layer == 4], 10, replace = TRUE))))
+    
+    # add connection between 4 and 5
+    g <-  igraph::add_edges(g, c(rbind(sample(igraph::V(g)[igraph::V(g)$layer == 4], 2, replace = TRUE),
+                                       sample(igraph::V(g)[igraph::V(g)$layer == 5], 2, replace = TRUE))))
+    
+    # add connection between 5 and 6
+    g <-  igraph::add_edges(g, c(rbind(sample(igraph::V(g)[igraph::V(g)$layer == 5], igraph::gorder(l6) * 2, replace = TRUE),
+                                       sample(igraph::V(g)[igraph::V(g)$layer == 6], igraph::gorder(l6) * 2, replace = TRUE ))))
+    
+    # extract tables and export
+    list("connection" = igraph::as_edgelist(g), 
+         "fragments" =  data.frame("id" =  igraph::V(g)$name, "layer" =  igraph::V(g)$layer))
   }
   
   rubish <- generate.rubish()
@@ -70,11 +75,11 @@ server <- function(input, output, session) {
          To demonstrate its potential (and save archaeologists' energy this day) the <a href=https://doi.org/10.21105/joss.04335 target=_blank>TSAR</a>  method was automatically applied, revealing the very nature of this unsuspected archaeological record.
          <ul>
           <li> First, the dissimilarity dendrogram revealed the <b>abnormal ordering</b> of Layers 1, 2, and 3.</li>
-          <li> Intrigued, the team of experts measured and compared <i>cohesion</i> and <i>admixture</i> values, refering to <a href=10.1016/j.jas.2021.105501 target=_blank>Plutniak 2021</a>, Table 1:
+          <li> Intrigued, the team of experts measured and compared <i>cohesion</i> and <i>admixture</i> values, refering to <a href=10.1016/j.jas.2021.105501 target=_blank>Plutniak 2021</a>, Table 1 to interpret them:
             <ul> 
                 <li> Layers 1 and 2 had <b>cohesion</b> values <b>highly</b> different and a <b>low admixture</b> value, suggesting movement of fragments from one certain unit (from Layer 1 to an uncertain Layer 2).</li>
-                <li> Layers 1 and 3 showed a <b>low</b> difference between <b>cohesion</b> values and a <b>high admixture</b> value, suggesting transport of fragments within a single initial unit (i.e. Layer 1+3), contradicting the previous result.</li>
-                <li> Layers 4 and 5 presented a <b>low</b> difference between <b>cohesion</b> values and a <b>low admixture</b> value as well, suggesting transport of fragments between two certain units.</li>
+                <li> Layers 1 and 3 showed a rather <b>low</b> difference between <b>cohesion</b> values and a <b>high admixture</b> value, suggesting transport of fragments within a single initial unit (i.e. Layer 1+3), contradicting the previous result.</li>
+                <li> Layers 3 and 4 presented a rather <b>low</b> difference between <b>cohesion</b> values and a <b>low admixture</b> value as well, suggesting transport of fragments between two certain units.</li>
                 <li> Layers 5 and 6 showed <b>high</b> difference between <b>cohesion</b> values and a <b>high admixture</b> value as well, desperately suggesting general uncertainty about those layers and their formation.</li>
             </ul>
           </li>
@@ -162,7 +167,7 @@ server <- function(input, output, session) {
     
     g.data <- graph.data()
     objects.df <- g.data$objects.df
-
+    
     choices.val <- names(objects.df)
     choices.val <- choices.val[ ! tolower(choices.val) == "id"]
     names(choices.val) <- names(choices.val)
@@ -192,7 +197,7 @@ server <- function(input, output, session) {
   
   
   
-   # SELECTORS ----
+  # SELECTORS ----
   # ... pair of units selector ----
   output$layers.selector <- renderUI({
     req(graph.data2())
@@ -209,43 +214,43 @@ server <- function(input, output, session) {
   # ... morpho selector ----
   output$morpho.selector <- renderUI({
     req(graph.data2())
-
+    
     choices.val <- c("-", names(graph.data()$objects.df))
     choices.val <- choices.val[ ! tolower(choices.val) == "id"]
-
+    
     selectInput("morpho.variable", "Morphometry variable",
                 choices = choices.val, width= "90%")
   })
-
+  
   # ... x selector ----
   output$x.selector <- renderUI({
     req(graph.data2())
-
+    
     choices.val <- c("-", names(graph.data()$objects.df))
     choices.val <- choices.val[ ! tolower(choices.val) == "id"]
-
+    
     selectInput("x.variable", "X coordinates",
                 choices = choices.val, width= "90%")
   })
-
+  
   # ... y selector ----
   output$y.selector <- renderUI({
     req(graph.data2())
-
+    
     choices.val <- c("-", names(graph.data()$objects.df))
     choices.val <- choices.val[ ! tolower(choices.val) == "id"]
-
+    
     selectInput("y.variable", "Y coordinates",
                 choices = choices.val, width= "90%")
   })
-
+  
   # ... z selector ----
   output$z.selector <- renderUI({
     req(graph.data2())
-
+    
     choices.val <- c("-", names(graph.data()$objects.df))
     choices.val <- choices.val[ ! tolower(choices.val) == "id"]
-
+    
     selectInput("z.variable", "Z coordinates",
                 choices = choices.val, width= "90%")
   })
@@ -258,19 +263,24 @@ server <- function(input, output, session) {
     
     g.data <- graph.data2()
     
-    graph <- archeofrag::make_frag_object(g.data$edges.df, fragments = g.data$objects.df)
+    try(graph <- archeofrag::make_frag_object(g.data$edges.df, fragments = g.data$objects.df), silent = T)
+    if( ! exists("graph")){
+      showNotification(geterrmessage(), duration = 10, type = "error")
+      return()
+    }
+    
     graph <- archeofrag::make_cr_graph(graph)
     
     # check if the data is complete for weighting parameter
     check.and.delete.frag <- function(g, var){
-        values <- vertex_attr(g, var)
-        idx <- is.na(values) | values == ""
-        if(sum(idx)){ 
-          g <- delete_vertices(graph, idx) 
-          showNotification(paste0("Incomplete values in '", var, "'. ", as.character(sum(idx)), " fragments removed."),
-                           duration = 10, type = "message")
-          }
-        g
+      values <- igraph::vertex_attr(g, var)
+      idx <- is.na(values) | values == ""
+      if(sum(idx)){ 
+        g <- igraph::delete_vertices(graph, idx) 
+        showNotification(paste0("Incomplete values in '", var, "'. ", as.character(sum(idx)), " fragments removed."),
+                         duration = 10, type = "message")
+      }
+      g
     }
     
     if( ! is.null(input$morpho.variable)){ graph <- check.and.delete.frag(graph, input$morpho.variable)}
@@ -281,16 +291,16 @@ server <- function(input, output, session) {
     pairs <- utils::combn(sort(unique(igraph::V(graph)$spatial.variable)), 2)
     
     g.list <- lapply(seq_len(ncol(pairs)), function(x,
-                                                   morpho.var = input$morpho.variable, 
-                                                   x.var = input$x.variable, 
-                                                   y.var = input$y.variable, 
-                                                   z.var = input$z.variable){    
+                                                    morpho.var = input$morpho.variable, 
+                                                    x.var = input$x.variable, 
+                                                    y.var = input$y.variable, 
+                                                    z.var = input$z.variable){    
       g <- archeofrag::frag.get.layers.pair(graph, "spatial.variable", pairs[, x], verbose = FALSE)
       if(is.null(g)){ return() }
       if(length(unique(igraph::V(g)$spatial.variable)) != 2){ return() }
       
       archeofrag::frag.edges.weighting(g, "spatial.variable", morphometry = morpho.var, 
-                           x = x.var, y = y.var, z = z.var, verbose = FALSE)
+                                       x = x.var, y = y.var, z = z.var, verbose = FALSE)
     })
     names(g.list) <- sapply(seq_len(ncol(pairs)), function(x)
       paste(pairs[1, x], "/", pairs[2, x]))
@@ -313,7 +323,7 @@ server <- function(input, output, session) {
   
   output$n.components <- renderUI({
     req(graph.list()) 
-    numericInput("n.components", "Initial objects number", value = input.graph.params()$n.components, width = "100%")
+    numericInput("n.components", "Initial objects count", value = input.graph.params()$n.components, width = "100%")
   })
   
   output$components.balance <- renderUI({
@@ -331,7 +341,7 @@ server <- function(input, output, session) {
   
   output$n.final.fragments <- renderUI({
     req(graph.list())
-    numericInput("n.final.fragments", "Final fragments number", value = input.graph.params()$vertices, width = "100%")
+    numericInput("n.final.fragments", "Final fragments count", value = input.graph.params()$vertices, width = "100%")
   })
   
   output$disturbance <- renderUI({
@@ -342,13 +352,21 @@ server <- function(input, output, session) {
   
   output$aggreg.factor <- renderUI({
     req(input.graph.params())
-    sliderInput("aggreg.factor", "Aggregation factor", min = 0, max= 1, step = .01, 
+    sliderInput("aggreg.factor", "Fragments aggregation", min = 0, max= 1, step = .01, 
                 value = input.graph.params()$aggreg.factor, width = "100%")
   })
   
   output$asymmetric <- renderUI({
     req(input.graph.params())
-    selectInput("asymmetric", "Asymmetric move from unit", choices = c("none", "1", "2"), selected = "none", width = "50%")
+    units.pair <- names(graph.list())[as.numeric(input$units.pair)]
+    
+    eval(parse(text = paste0(
+      "selectInput('asymmetric', 'Unidirectional transport from unit', ",
+                  "choices = c('none' = 'none', '",
+                  gsub("/", "->", units.pair), "' = '1', '",
+                  gsub("^(.*) / (.*)$", "\\2 -> \\1", units.pair), "' = '2'),",
+                  "selected = 'none', width = '100%')"
+    )))
   })
   
   output$planar <- renderUI({
@@ -358,15 +376,15 @@ server <- function(input, output, session) {
     if(is.na(planar)) { 
       planar <- FALSE 
       showNotification("The RBGL package is not installed: the `planarity` value cannot be determinated and the 'Generate only planar graphs' is set to FALSE", duration = 10, type = "warning")
-      }
+    }
     
     checkboxInput("planar", "Generate only planar graphs", value = planar)
   })
   
-
-# MEASUREMENT-----
   
-stats.table <- reactive({    # stats table ----
+  # MEASUREMENT-----
+  
+  stats.table <- reactive({    # stats table ----
     req(graph.list, input$morpho.variable)
     g.list <- graph.list()
     
@@ -410,7 +428,7 @@ stats.table <- reactive({    # stats table ----
     stats.table$unit1 <- gsub("(.*) / .*", "\\1", stats.table[,1])
     stats.table$unit2 <- gsub("^.* / (.*$)", "\\1", stats.table[,1])
     
-    pairs <- utils::combn(sort(unique(graph.data2()$objects.df$spatial.variable)), 2)
+    pairs <- utils::combn(sort(unique(c(stats.table$unit1, stats.table$unit2))), 2)
     pairs <- t(as.data.frame(pairs))
     pairs <- rbind(pairs, pairs[, 2:1])
     
@@ -421,14 +439,14 @@ stats.table <- reactive({    # stats table ----
     
     if(input$normalise.diss){
       pairs$Admixture <- ( pairs$Admixture - min(pairs$Admixture, na.rm = T)) / 
-          (max(pairs$Admixture, na.rm = T) - min(pairs$Admixture, na.rm = T))
+        (max(pairs$Admixture, na.rm = T) - min(pairs$Admixture, na.rm = T))
     }
     
     diss <- stats::reshape(pairs, timevar = "unit1", idvar = "unit2",  v.names = "Admixture", direction = "wide")
     colnames(diss) <- gsub("^Admixture.", "", colnames(diss))
     rownames(diss) <- diss[, 1]
     diss <- diss[, -1]
-
+    
     diss[ order(rownames(diss)), order(colnames(diss))]
   })
   
@@ -445,15 +463,22 @@ stats.table <- reactive({    # stats table ----
     
     admixTab <- stats::as.dist(admixTab)
     
-    dend.plot <- stats::as.dendrogram(stats::hclust(admixTab, method = "complete"))
+    dend.plot <- NULL
+    eval(parse(text = paste0(
+    "dend.plot <- stats::as.dendrogram(stats::hclust(admixTab, method = \"", input$clustmethod, "\"))"
+    )))
     sort(dend.plot, decreasing = T)
   })
   
   output$admix.plot <- renderPlot({  
     req(admix.dendr)
     
+    method.name <- c(UPGMA = "average", WPGMA = "mcquitty", "Single linkage" = "single", "Complete linkage" = "complete",  Ward = "ward.D2")
+    method.name <- names(method.name)[method.name == input$clustmethod]
+    
     plot(admix.dendr(), horiz = T, main = input$spatial.variable,
-         xlab ="Dissimilarity: 1 - admixture. An alphanumerical ordering constraint is applied to the branches of the dendrogram") 
+         xlab = paste0("Dissimilarity: 1 - admixture. Clustering method: ", method.name,
+                      "\nAn alphanumerical ordering constraint is applied to the branches of the dendrogram")) 
   })
   
   
@@ -461,8 +486,8 @@ stats.table <- reactive({    # stats table ----
     filename = paste0("archeofrag-dissimilarity-",  input$spatial.variable, ".svg"),
     content = function(file) {
       grDevices::svg(file)
-        plot(admix.dendr(), horiz = T, main = input$spatial.variable)
-        grDevices::dev.off()
+      plot(admix.dendr(), horiz = T, main = input$spatial.variable)
+      grDevices::dev.off()
     }
   )
   
@@ -493,7 +518,9 @@ stats.table <- reactive({    # stats table ----
     data.frame(
       "admixture" = round(archeofrag::frag.layers.admixture(g, "layer", verbose = FALSE), 3),
       "cohes" = rbind(archeofrag::frag.layers.cohesion(g, "layer", verbose = FALSE)),
+      "n.objects" = as.integer(igraph::components(g)$no),
       "e.obs" = igraph::gsize(g),
+      "v.obs" = igraph::gorder(g),
       "balance.obs" = table(igraph::V(g)$layer)[1] / igraph::gorder(g),
       "weights.sum" = sum(igraph::E(g)$weight),
       "weights.median" = stats::median(igraph::E(g)$weight),
@@ -514,9 +541,8 @@ stats.table <- reactive({    # stats table ----
       showNotification("The number of replication must be in [30, 1000].", type="warning")
       return(NULL)
     }
-    
     asymmetric <- input$asymmetric
-    if(asymmetric == "none") asymmetric <- NULL
+    if(asymmetric == "none") asymmetric <- 0
     
     params <- list("n.components" = input$n.components,
                    "n.final.fragments" = input$n.final.fragments,  
@@ -527,77 +553,86 @@ stats.table <- reactive({    # stats table ----
                    "planar" = input$planar,
                    "edge.loss" = input$edge.loss,
                    "vertice.loss" = input$vertice.loss)
-
-        
+    
+    if( ! is.na(input$seed)){
+       doRNG::registerDoRNG(input$seed) # set seed if required
+    }
+    
     if(input$parallelize){
       hypothese1.res <- foreach::foreach(i = seq_len(input$replications), .combine = "rbind",
-                                .errorhandling = "remove") %dopar%{
-                                  exec.simulation(initial.layers = 1,
-                                                  n.components = params$n.components,
-                                                  vertices = params$n.final.fragments,  
-                                                  balance = params$balance,
-                                                  components.balance = params$components.balance,
-                                                  disturbance = params$disturbance,
-                                                  aggreg.factor = params$aggreg.factor,
-                                                  planar = params$planar,
-                                                  asymmetric.transport.from = asymmetric,
-                                                  edge.loss = params$edge.loss,
-                                                  vertice.loss = params$vertice.loss)
-                              }
-    
-      hypothese2.res <- foreach::foreach(i = seq_len(input$replications), .combine = "rbind",
-                                .errorhandling = "remove") %dopar%{
-                                  exec.simulation(initial.layers = 2,
-                                                  n.components = params$n.components,
-                                                  vertices = params$n.final.fragments,  
-                                                  balance = params$balance,
-                                                  components.balance = params$components.balance,
-                                                  disturbance = params$disturbance,
-                                                  aggreg.factor = params$aggreg.factor,
-                                                  planar = params$planar,
-                                                  asymmetric.transport.from = asymmetric,
-                                                  edge.loss = params$edge.loss,
-                                                  vertice.loss = params$vertice.loss)
-                              }
-    
-    } else {
-      hypothese1.res <- foreach::foreach(i = seq_len(input$replications),  .combine = "rbind",
-                                .errorhandling = "remove") %do%{
-                                  exec.simulation(initial.layers = 1,
-                                                  n.components = params$n.components,
-                                                  vertices = params$n.final.fragments,  
-                                                  balance = params$balance,
-                                                  components.balance = params$components.balance,
-                                                  disturbance = params$disturbance,
-                                                  aggreg.factor = params$aggreg.factor,
-                                                  planar = params$planar,
-                                                  asymmetric.transport.from = asymmetric,
-                                                  edge.loss = params$edge.loss,
-                                                  vertice.loss = params$vertice.loss)
-                                }
+                                         .errorhandling = "remove"
+                                         ) %dopar%{
+                                           exec.simulation(initial.layers = 1,
+                                                           n.components = params$n.components,
+                                                           vertices = params$n.final.fragments,  
+                                                           balance = params$balance,
+                                                           components.balance = params$components.balance,
+                                                           disturbance = params$disturbance,
+                                                           aggreg.factor = params$aggreg.factor,
+                                                           planar = params$planar,
+                                                           asymmetric.transport.from = asymmetric,
+                                                           edge.loss = params$edge.loss,
+                                                           vertice.loss = params$vertice.loss)
+                                         }
       
       hypothese2.res <- foreach::foreach(i = seq_len(input$replications), .combine = "rbind",
-                                .errorhandling = "remove") %do%{
-                                  exec.simulation(initial.layers = 2,
-                                                  n.components = params$n.components,
-                                                  vertices = params$n.final.fragments,  
-                                                  balance = params$balance,
-                                                  components.balance = params$components.balance,
-                                                  disturbance = params$disturbance,
-                                                  aggreg.factor = params$aggreg.factor,
-                                                  planar = params$planar,
-                                                  asymmetric.transport.from = asymmetric,
-                                                  edge.loss = params$edge.loss,
-                                                  vertice.loss = params$vertice.loss)
-                                }
+                                         .errorhandling = "remove") %dopar%{
+                                           exec.simulation(initial.layers = 2,
+                                                           n.components = params$n.components,
+                                                           vertices = params$n.final.fragments,  
+                                                           balance = params$balance,
+                                                           components.balance = params$components.balance,
+                                                           disturbance = params$disturbance,
+                                                           aggreg.factor = params$aggreg.factor,
+                                                           planar = params$planar,
+                                                           asymmetric.transport.from = asymmetric,
+                                                           edge.loss = params$edge.loss,
+                                                           vertice.loss = params$vertice.loss)
+                                         }
+      
+    } else {
+      hypothese1.res <- foreach::foreach(i = seq_len(input$replications),  .combine = "rbind",
+                                         .errorhandling = "remove") %do%{
+                                           exec.simulation(initial.layers = 1,
+                                                           n.components = params$n.components,
+                                                           vertices = params$n.final.fragments,  
+                                                           balance = params$balance,
+                                                           components.balance = params$components.balance,
+                                                           disturbance = params$disturbance,
+                                                           aggreg.factor = params$aggreg.factor,
+                                                           planar = params$planar,
+                                                           asymmetric.transport.from = asymmetric,
+                                                           edge.loss = params$edge.loss,
+                                                           vertice.loss = params$vertice.loss)
+                                         }
+      
+      hypothese2.res <- foreach::foreach(i = seq_len(input$replications), .combine = "rbind",
+                                         .errorhandling = "remove") %do%{
+                                           exec.simulation(initial.layers = 2,
+                                                           n.components = params$n.components,
+                                                           vertices = params$n.final.fragments,  
+                                                           balance = params$balance,
+                                                           components.balance = params$components.balance,
+                                                           disturbance = params$disturbance,
+                                                           aggreg.factor = params$aggreg.factor,
+                                                           planar = params$planar,
+                                                           asymmetric.transport.from = asymmetric,
+                                                           edge.loss = params$edge.loss,
+                                                           vertice.loss = params$vertice.loss)
+                                         }
     } # end else
+    
+    if(is.null(hypothese1.res) | is.null(hypothese2.res)){
+      showNotification("No solution found for those parameters.", duration = 12)
+      return(NULL)
+    }
     
     if(nrow(hypothese1.res[complete.cases(hypothese1.res),]) < 31 | 
        nrow(hypothese2.res[complete.cases(hypothese2.res),]) < 31){
-       showNotification("Excessive information loss. For each hypothesis, less than 30 graphs with valid cohesion values generated. Increase the number of replications or decrease information loss parameters.", duration = 12)
-       return(NULL)
+      showNotification("Excessive information loss. For each hypothesis, less than 30 graphs with valid cohesion values generated. Increase the number of replications or decrease information loss parameters.", duration = 12)
+      return(NULL)
     }
- 
+    
     hypothese1.res$hypothesis <- "1"
     hypothese2.res$hypothesis <- "2"
     
@@ -614,7 +649,7 @@ stats.table <- reactive({    # stats table ----
     if(is.null(hypotheses.df)) return()
     hypotheses.df <- hypotheses.df[complete.cases(hypotheses.df),]
     HTML("<b>", paste( round(nrow(hypotheses.df)/ 2, 0), "</b> graphs with valid cohesion values generated in <b>",
-                       comment(hypotheses.df), "</b>."))
+                       comment(hypotheses.df), "</b>"))
   })
   
   summary.tab <- eventReactive(input$goButton, {# summary table  ----
@@ -623,21 +658,22 @@ stats.table <- reactive({    # stats table ----
     hypotheses.df <- hypotheses()
     if(is.null(hypotheses.df)) return()
     
-    colnames(hypotheses.df) <- c("admixture", "cohesion1", "cohesion2", "edges", "balance", "weightsum", "weights.median", "weights.sd", "hypothesis")
+    colnames(hypotheses.df) <- c("admixture", "cohesion1", "cohesion2", "n.objects", "edges", "fragments", "balance", "weightsum", "weights.median", "weights.sd", "hypothesis")
     hypotheses.df <- hypotheses.df[, c("admixture", "cohesion1", "cohesion2", "edges", "balance", "weightsum", "hypothesis")]
     
     summary.df <- archeofrag::frag.simul.summarise(graph.selected(), 
-                                       layer.attr = "spatial.variable", 
-                                       res.h1 = hypotheses.df[hypotheses.df$hypothesis == "1", -ncol(hypotheses.df)], 
-                                       res.h2 = hypotheses.df[hypotheses.df$hypothesis == "2", -ncol(hypotheses.df)], 
-                                       cohesion1.attr = "cohesion1", cohesion2.attr = "cohesion2", 
-                                       admixture.attr = "admixture", 
-                                       verbose = FALSE)
+                                                   layer.attr = "spatial.variable", 
+                                                   res.h1 = hypotheses.df[hypotheses.df$hypothesis == "1", -ncol(hypotheses.df)], 
+                                                   res.h2 = hypotheses.df[hypotheses.df$hypothesis == "2", -ncol(hypotheses.df)], 
+                                                   cohesion1.attr = "cohesion1", cohesion2.attr = "cohesion2", 
+                                                   admixture.attr = "admixture", 
+                                                   verbose = FALSE)
     colnames(summary.df)  <- c("H1 != H2?", "p.value", "Obs. value/H1", "Obs. value/H2")
     summary.df
   })
   
-  output$summary.tab <- renderTable({summary.tab()}, rownames=T)
+  output$summary.tab <- renderTable({summary.tab()}, rownames = TRUE)
+  
   
   
   # .. plot cohesion ####
@@ -663,10 +699,10 @@ stats.table <- reactive({    # stats table ----
       ggplot2::theme_light(base_size = 12) +
       ggplot2::geom_density(alpha=.5, linewidth=.3) +
       ggplot2::geom_boxplot(outlier.shape = 21) +
-      ggplot2::geom_vline(xintercept = cohes.values[1],  color = "#440154FF") +
-      ggplot2::geom_vline(xintercept = cohes.values[2], color = "#BBDF27FF") +
-      ggplot2::facet_wrap(~hypothesis, ncol=1) +
-      ggplot2::scale_fill_manual("spatial unit", values = c("#440154FF", "#BBDF27FF")) +
+      ggplot2::geom_vline(xintercept = cohes.values[1],  color = "#BBDF27FF") +
+      ggplot2::geom_vline(xintercept = cohes.values[2], color = "#440154FF") +
+      ggplot2::facet_wrap(~hypothesis, ncol=1,   scales = "free_y") +
+      ggplot2::scale_fill_manual("spatial unit", values = c("#BBDF27FF", "#440154FF")) +
       ggplot2::scale_x_continuous("Cohesion", limits=c(0,1)) + ggplot2::ggtitle("Cohesion by spatial unit") +
       ggplot2::theme(strip.text = ggplot2::element_text(size = 13))
   })
@@ -712,11 +748,11 @@ stats.table <- reactive({    # stats table ----
       ggplot2::ggsave(file, plot = test.simul.admixture.plot(), device = "svg", width=10, height=3, pointsize = 14)
     }
   )
-
+  
   output$admixture.plot.download.button <- renderUI({
     if(is.null(test.simul.admixture.plot())) return()
     downloadButton("admixture.plot.download", "as SVG") 
-    })
+  })
   
   # .. plot edge count ####
   test.simul.edges.plot <- eventReactive(input$goButton, {   
@@ -730,7 +766,7 @@ stats.table <- reactive({    # stats table ----
       ggplot2::geom_density(alpha=.5, linewidth=.3) +
       ggplot2::scale_fill_grey(start = .4, end = .9) +
       ggplot2::geom_vline(xintercept = igraph::gsize(obs.graph))  + 
-      ggplot2::xlab("Relations count") + ggplot2::ggtitle("Relations count")
+      ggplot2::xlab("Relationships count") + ggplot2::ggtitle("Relationships count")
   })
   
   output$test.simul.edges.plot <- renderPlot({test.simul.edges.plot()})
@@ -748,6 +784,102 @@ stats.table <- reactive({    # stats table ----
     downloadButton("edges.plot.download", "as SVG") 
   })
   
+  
+  # .. plot object count ####
+  test.simul.objects.plot <- eventReactive(input$goButton, {   
+    req(hypotheses)
+    hypotheses.df <- hypotheses()
+    if(is.null(hypotheses.df)) return()
+    if(length(unique(hypotheses.df$n.objects)) < 2) return()
+    obs.graph <- graph.selected()
+    
+    ggplot2::ggplot(hypotheses.df, ggplot2::aes(x= .data[["n.objects"]], fill = .data[["hypothesis"]])) +
+      ggplot2::theme_light(base_size = 12) +
+      ggplot2::geom_density(alpha=.5, linewidth=.3) +
+      ggplot2::scale_fill_grey(start = .4, end = .9) +
+      ggplot2::geom_vline(xintercept = igraph::components(obs.graph)$no)  + 
+      ggplot2::scale_x_continuous("Object count", breaks = function(x) unique(round(pretty(x), 0)) ) +
+      ggplot2::ggtitle("Object count")
+  })
+  
+  output$test.simul.objects.plot <- renderPlot({test.simul.objects.plot()})
+  
+  output$objects.plot.download <- downloadHandler(
+    filename = paste0("archeofrag-object-count-", input$spatial.variable, "-",
+                      gsub(" / ", "-", names(graph.list())[as.numeric(input$units.pair)]), ".svg"),
+    content = function(file) {
+      ggplot2::ggsave(file, plot = test.simul.objects.plot(), device = "svg", width=10, height=3, pointsize = 14)
+    }
+  )
+  
+  
+  output$test.simul.objects.block <- renderUI({
+    if(is.null(test.simul.objects.plot())) return()
+  
+    HTML(paste0(
+      h2("Object count"),
+      column(10, align="center",
+             HTML("<div style=width:40%;, align=left><p>
+                   The number of objects (i.e. sets of connected fragments). This value is equal to the 'initial objects count', unless one of the 'Information loss' parameters is not null.
+                  </p></div>")
+      ),
+    fluidRow(column(10,
+                    imageOutput("test.simul.objects.plot", height = "200px", width= "100%")),
+             column(1, 
+                    downloadButton("objects.plot.download", "as SVG"),
+                    style="padding-top:80px;"))
+    ))
+  })
+  
+  
+  
+  # .. plot fragments count ####
+  test.simul.frag.plot <- eventReactive(input$goButton, {   
+    req(hypotheses)
+    hypotheses.df <- hypotheses()
+    if(is.null(hypotheses.df)) return()
+    
+    if(length(unique(hypotheses.df$v.obs)) < 2) return()
+    obs.graph <- graph.selected()
+    
+    ggplot2::ggplot(hypotheses.df, ggplot2::aes(x= .data[["v.obs"]], fill = .data[["hypothesis"]])) +
+      ggplot2::theme_light(base_size = 12) +
+      ggplot2::geom_density(alpha=.5, linewidth=.3) +
+      ggplot2::scale_fill_grey(start = .4, end = .9) +
+      ggplot2::geom_vline(xintercept = igraph::gorder(obs.graph))  + 
+      ggplot2::scale_x_continuous("Fragment count", breaks = function(x) unique(round(pretty(x), 0)) ) +
+      ggplot2::ggtitle("Fragment count")
+  })
+  
+  output$test.simul.frag.plot <- renderPlot({test.simul.frag.plot()})
+  
+  output$frag.plot.download <- downloadHandler(
+    filename = paste0("archeofrag-fragment-count-", input$spatial.variable, "-",
+                      gsub(" / ", "-", names(graph.list())[as.numeric(input$units.pair)]), ".svg"),
+    content = function(file) {
+      ggplot2::ggsave(file, plot = test.simul.frag.plot(), device = "svg", width=10, height=3, pointsize = 14)
+    }
+  )
+  
+  
+  output$test.simul.frag.block <- renderUI({
+    if(is.null(test.simul.frag.plot())) return()
+    
+    HTML(paste0(
+      h2("Fragments count"),
+      column(10, align="center",
+             HTML("<div style=width:40%;, align=left><p>
+                   The number of fragments. This value is equal to the 'Final fragments count', unless one of the 'Information loss' parameters is not null.
+                  </p></div>")
+      ),
+      fluidRow(column(10,
+                      imageOutput("test.simul.frag.plot", height = "200px", width= "100%")),
+               column(1, 
+                      downloadButton("frag.plot.download", "as SVG"),
+                      style="padding-top:80px;"))
+    ))
+  })
+  
   # .. plot weights ####
   test.simul.weights.plot <- eventReactive(input$goButton, { 
     req(hypotheses)
@@ -762,7 +894,7 @@ stats.table <- reactive({    # stats table ----
     colnames(w.sd.df)[2] <- "value"
     colnames(w.median.df)[2] <- "value"
     weights.df <- rbind(w.sum.df, w.sd.df, w.median.df)
-
+    
     vlines <-  data.frame("var" = c("Median absolute deviation", "Median", "Sum"),
                           "value" = c(stats::mad(igraph::E(obs.graph)$weight), 
                                       stats::median(igraph::E(obs.graph)$weight),
@@ -822,21 +954,25 @@ stats.table <- reactive({    # stats table ----
     downloadButton("balance.plot.download", "as SVG") 
   })
   
-
+  
   # VISUALISATION ####
   output$visualisation.title <- renderText({
     units.pair <- names(graph.list())[as.numeric(input$units.pair)]
+    req(graph.selected())
+    g <- graph.selected()
     
     paste0("Fragmentation graph for spatial units <b>", units.pair, 
            "</b> from the <b>",  input$spatial.variable, 
            "</b> variable. 
             <ul>
-              <li>lines: connection relationships</li> 
-              <li>nodes: fragments</li>
-              <li>color: spatial unit associated with the fragments (<font color=red>red</font> for <b>",  
+              <li>lines: connection relationships (n=", igraph::gsize(g), ")</li> 
+              <li>nodes: fragments (n=", igraph::gorder(g), ")</li> 
+              <li>colors: spatial units associated with the fragments (<b><font color=YellowGreen>green</font></b> for <b>",  
            gsub("^(.*)/.*", "\\1", units.pair), 
-           "</b>, <font color=purple>purple</font> for <b>", gsub("^.*/(.*)", "\\1", units.pair), 
-           "</b>)</li></ul>")
+           "</b>, <b><font color=purple>purple</font></b> for <b>", gsub("^.*/(.*)", "\\1", units.pair), 
+           "</b>)</li></ul>
+           Note that the node positions are only determined by the graph drawing method and do not reflect the archaeological location of the fragments in the site.
+           ")
   })
   
   frag.graph.viz <- reactive({   
@@ -848,7 +984,7 @@ stats.table <- reactive({    # stats table ----
   
   output$frag.graph.viz.plot <- renderPlot({ 
     archeofrag::frag.graph.plot(frag.graph.viz(), layer.attr = "spatial.variable") 
-    })
+  })
   
   
   output$frag.graph.viz.download <- downloadHandler(
@@ -856,7 +992,7 @@ stats.table <- reactive({    # stats table ----
                       gsub(" / ", "-", names(graph.list())[as.numeric(input$units.pair)]), ".svg"),
     content = function(file) {
       grDevices::svg(file)
-        archeofrag::frag.graph.plot(frag.graph.viz(), layer.attr = "spatial.variable") 
+      archeofrag::frag.graph.plot(frag.graph.viz(), layer.attr = "spatial.variable") 
       grDevices::dev.off()
     }
   )
@@ -870,55 +1006,648 @@ stats.table <- reactive({    # stats table ----
   
   # R CODE ----
   
-  output$reproducibility <- reactive({
+  r.code <- reactive({
     req(input$n.components)
-  
+    
     asymmetric <- input$asymmetric
-    if(asymmetric == "none") asymmetric <- "NULL"
+    if(asymmetric == "none"){
+      asymmetric.str <- ""
+    } else{
+      asymmetric.str <- paste0("                                     asymmetric.transport.from = ", asymmetric, ",<br>")
+    }
     
     mode <- "%par%"
     if(input$parallelize) mode <- "%dopar%"
     
-  generate.run.code <- function(n.layers){  
+    generate.run.code <- function(n.layers, edge.loss, vertice.loss){
+      
+      connection.to.remove.str <- ""
+      if(edge.loss > 0){
+        connection.to.remove.str <- paste0("              g <- archeofrag::frag.observer.failure(g, likelihood = ",
+             edge.loss, " / 100,<br>",
+             "                                                     remove.vertices = TRUE)[[1]]<br>")
+      }
+      
+      frag.to.remove.str <- ""
+      if(vertice.loss > 0){
+        frag.to.remove.str <- paste0("              n.frag.to.remove <- round(",
+                                 input$vertice.loss, " / 100) * igraph::gorder(g), 0)<br>",
+             "              g <- archeofrag::frag.graph.reduce(g, n.frag.to.remove = n.frag.to.remove,<br>",
+             "                                                    conserve.objects.nr = FALSE)<br>")
+      }
+      
       paste0("<pre>",
-      "h", n.layers, " <- foreach(i=1:", input$replications, ", .combine = 'rbind', .errorhandling = 'remove') ", mode," {<br>",
-    "             g <- frag.simul.process(initial.layers = ", n.layers, ",\n",
-    "                                     n.components = ", input$n.components, ",<br>",
-    "                                     vertices = ", input$n.final.fragments, ",<br>",  
-    "                                     balance = ", input$balance, ",<br>",
-    "                                     components.balance = ", input$components.balance, ",<br>",
-    "                                     disturbance = ", input$disturbance, ",<br>",
-    "                                     aggreg.factor = ", input$aggreg.factor, ",<br>",
-    "                                     planar = ", input$planar, ",<br>",
-    "                                     asymmetric.transport.from = ", asymmetric, ")<br>",
-    "              g <- frag.edges.weighting(g, 'layer')<br>", 
-    "              g <- archeofrag::frag.observer.failure(g, likelihood = ", input$edge.loss, " / 100,<br>",
-    "                                                     remove.vertices = TRUE)[[1]]<br>",
-    "              n.frag.to.remove <- round((", input$vertice.loss, " / 100) * igraph::gorder(g), 0)<br>",
-    "              g <- archeofrag::frag.graph.reduce(g, n.frag.to.remove = n.frag.to.remove,<br>",
-    "                                                   conserve.objects.nr = FALSE)<br>",
-    "              data.frame(<br>",
-    "                 'admixture'       = round(frag.layers.admixture(g, 'layer'), 3),<br>",
-    "                 'cohesion'        = rbind(frag.layers.cohesion(g, 'layer')),<br>",
-    "                 'relations'       = igraph::gsize(g),<br>",
-    "                 'balance'         = table(igraph::V(g)$layer)[1] / igraph::gorder(g),<br>",
-    "                 'weights.sum'     = sum(igraph::E(g)$weight),<br>",
-    "                 'weights.median'  = stats::median(igraph::E(g)$weight),<br>",
-    "                 'weights.sd'      = stats::sd(igraph::E(g)$weight)<br>",
-    "              )<br>",
-    "       }", 
-       "</pre>")
-  }
-
-  
-  parallel.string <- ""
-  if(input$parallelize) parallel.string <- "<br>library(doParallel)<br>registerDoParallel()"
-  
-  paste0("<pre>library(archeofrag) <br>library(igraph) <br>library(foreach)", parallel.string, "</pre>",
-         generate.run.code(1), 
-         "<br><br>", 
-         generate.run.code(2))
+             "h", n.layers, " <- foreach(i=1:", input$replications, ", .combine = 'rbind', .errorhandling = 'remove') ", mode," {<br><br>",
+             "             g <- frag.simul.process(initial.layers = ", n.layers, ",\n",
+             "                                     n.components = ", input$n.components, ",<br>",
+             "                                     vertices = ", input$n.final.fragments, ",<br>",  
+             "                                     balance = ", input$balance, ",<br>",
+             "                                     components.balance = ", input$components.balance, ",<br>",
+             "                                     disturbance = ", input$disturbance, ",<br>",
+             "                                     aggreg.factor = ", input$aggreg.factor, ",<br>",
+                                                   asymmetric.str,
+             "                                     planar = ", input$planar, ")<br>",
+             connection.to.remove.str,
+             frag.to.remove.str,
+             "              data.frame(<br>",
+             "                 'admixture'       = round(frag.layers.admixture(g, 'layer'), 3),<br>",
+             "                 'cohesion'        = rbind(frag.layers.cohesion(g, 'layer')),<br>",
+             "                 'relations'       = igraph::gsize(g),<br>",
+             "                 'balance'         = table(igraph::V(g)$layer)[1] / igraph::gorder(g),<br>",
+             "                 'weights.sum'     = sum(igraph::E(g)$weight),<br>",
+             "                 'weights.median'  = stats::median(igraph::E(g)$weight),<br>",
+             "                 'weights.mad'     = stats::mad(igraph::E(g)$weight)<br>",
+             "              )<br>",
+             "       }", 
+             "</pre>")
+    }
     
+    
+    parallel.string <- ""
+    if(input$parallelize) parallel.string <- "library(doParallel)<br>registerDoParallel()<br>"
+    
+    paste0("<pre>library(archeofrag) <br>library(igraph) <br>library(foreach)<br>", parallel.string, "</pre>",
+           generate.run.code(1, edge.loss = input$edge.loss, vertice.loss = input$vertice.loss), 
+           "<br><br>", 
+           generate.run.code(2, edge.loss = input$edge.loss, vertice.loss = input$vertice.loss))
   }) # end reactive
   
-}
+  output$r.code <- reactive({r.code()})
+  
+  observeEvent(input$r.code.copy.button, {
+    Rcode.plaintext <- r.code()
+    
+    Rcode.plaintext <- gsub("<br>", "\n", Rcode.plaintext)
+    Rcode.plaintext <- gsub("</?pre>", "", Rcode.plaintext)
+    session$sendCustomMessage("txt", Rcode.plaintext)
+  })
+  
+  
+  # openMOLE  ----
+  # .. UI elements  ----
+  
+  output$OM.objectsNumber.min.ui <- renderUI({
+    numericInput("OM.objectsNumber.min", "Initial objects count: minimum", min = 1, step = 1, 
+                 value = input.graph.params()$n.components)
+  })
+  
+  output$OM.objectsNumber.max.ui <- renderUI({
+    numericInput("OM.objectsNumber.max", "maximum", min = 1, step = 1,
+                 value =  input.graph.params()$n.components * 10)
+  })
+  
+  output$OM.fragmentsNumber.min.ui <- renderUI({
+    numericInput("OM.fragmentsNumber.min", "Total fragments count: minimum", min = 1, step = 1, 
+                 value =  input.graph.params()$vertices)
+  })
+  
+  output$OM.fragmentsNumber.max.ui <- renderUI({
+    numericInput("OM.fragmentsNumber.max", "maximum", min = 1, step = 1,
+                 value =  input.graph.params()$vertices * 100)
+  })
+  
+  output$OM.FinalfragmentsCount.sens.ui <- renderUI({
+    sliderInput("OM.fragmentsCountOut.sens", 
+                paste0("Final fragments count (obs. value: ", input.graph.params()$vertices, ") +/- (%)"), 
+                value = 0, min = 0, max = 50, step = 1)
+  })
+  
+  output$OM.fragmentsBalance.val.ui <- renderUI({
+    bal <- input.graph.params()$balance
+    sliderInput("OM.fragmentsBalance.val", 
+                paste0("Fragments balance (obs. value: ", input.graph.params()$balance, ")"),
+                min = 0.01, max=0.99, step = 0.01, 
+                value = c(bal - .1, bal + .1))
+  })
+  
+  output$OM.objectBalance.val.ui <- renderUI({
+    comp.bal <- input.graph.params()$components.balance
+    sliderInput("OM.objectBalance.val", 
+                paste0("Initial objects balance (obs. value: ", input.graph.params()$components.balance, ")"),
+                min = 0.01, max = 0.99, step = 0.01, 
+                value = c(comp.bal - .1, comp.bal + .1))
+  })
+  
+  output$OM.disturbance.val.ui <- renderUI({
+    disturbance <- input.graph.params()$disturbance
+    disturbance.max <- disturbance + .1
+    disturbance.min <- disturbance - .1
+    if(disturbance.min <= 0){disturbance.min <- 0.01}
+    
+    sliderInput("OM.disturbance.val",
+                paste0("Disturbance (obs. value: ", input.graph.params()$disturbance, ")"), 
+                min = 0, max = 1, step = 0.01, 
+                value = c(disturbance.min, disturbance.max))
+  })
+  
+  output$OM.aggregFactor.val.ui <- renderUI({
+    agreg <- input.graph.params()$aggreg.factor
+
+    sliderInput("OM.aggregFactor.val", 
+                paste0("Fragments aggregation (obs. value: ", input.graph.params()$aggreg.factor, ")"),
+                min = 0, max = 1, step = 0.01, 
+            value = c(agreg - .1, agreg + .1))
+  })
+  
+  output$OM.asymmetric.selection <- renderUI({
+    req(input.graph.params())
+    units.pair <- names(graph.list())[as.numeric(input$units.pair)]
+    
+    from1to2  <- gsub("/", "->", units.pair)       
+    from2to1 <- gsub("^(.*) / (.*)$", "\\2 -> \\1", units.pair)
+                
+    eval(parse(text = paste0(
+      "selectInput('OM.asymmetric.val', 'Unidirectional transport from unit', ",
+      "choices = c('none' = 'none',",
+      "'", from1to2, "' = '1',", 
+      "'", from2to1, "' = '2',",
+      "'", from2to1, ", ", from2to1, "' = '1, 2',",
+      "'", "none, ", from2to1, ", ", from2to1, "' = 'none, 1, 2'",
+      "),",
+      "selected = '", "none, ", from2to1, ", ", from2to1,"', width = '100%')"
+    )))
+  })
+  
+  
+  # .. code ----
+  openMOLE.code <- reactive({
+    req(input$OM.asymmetric.val)
+    
+
+    # .. origin variables ----
+    OM.layerNumber.str <- ""
+    OM.objectsNumber.str <- ""
+    OM.fragmentsNumber.str <- ""
+    OM.fragmentsBalance.str <- ""
+    OM.objectBalance.str <- ""
+    OM.disturbance.str <- ""
+    OM.aggregFactor.str <- ""
+    OM.preserveObjectsNumber.str <- ""
+    OM.planarGraphsOnly.str <- ""
+    OM.asymmetric.str <- ""
+    
+    OM.layerNumber.str <- paste0("    layerNumber in Seq(", input$OM.layerNumber.val, "),<br>")
+    OM.objectsNumber.str <- paste0("    objectsNumber in (", format(input$OM.objectsNumber.min, nsmall = 2), " to ",
+                                   format(input$OM.objectsNumber.max, nsmall = 2), "),<br>")
+    OM.fragmentsNumber.str <- paste0("    fragmentsNumber in (", format(input$OM.fragmentsNumber.min, nsmall = 2), " to ",
+                                     format(input$OM.fragmentsNumber.max, nsmall = 2), "),<br>")
+    
+    # final fragment count (min / max)
+    final.frag.count.adjust <- round(input.graph.params()$vertices * input$OM.fragmentsCountOut.sens / 100, 0)
+    finalFragCountMin <- input.graph.params()$vertices - final.frag.count.adjust
+    finalFragCountMax <- input.graph.params()$vertices + final.frag.count.adjust
+    
+    OM.finalFragmentsNumberMinOut.str <- paste0('  finalFragmentsNumberMin := ', finalFragCountMin, ',<br>') 
+    
+    OM.finalFragmentsNumberMaxOut.str <- ""
+    OM.finalFragmentsNumberMax.map.str <- ""
+    OM.finalFragmentsNumberMax.init.str <- ""
+    
+    if(finalFragCountMin != finalFragCountMax){
+      OM.finalFragmentsNumberMaxOut.str <- paste0('  finalFragmentsNumberMax := ', finalFragCountMax, ',<br>') 
+      OM.finalFragmentsNumberMax.map.str <- '  inputs += finalFragmentsNumberMax.mapped,<br>'
+      OM.finalFragmentsNumberMax.init.str <- 'val finalFragmentsNumberMax = Val[Int]<br>'
+    }
+    
+    # preserve object number
+    preserveObjectsNumber.str <- unlist(strsplit(input$OM.preserveObjectsNumber.val, split = ", "))
+    
+    if(length(preserveObjectsNumber.str) > 1){
+      OM.preserveObjectsNumber.str <- paste0("    preserveObjectsNumber in TrueFalse,<br>")
+    }
+    
+    # planarity
+    planarGraphOnly.str <- unlist(strsplit(input$OM.planarGraphsOnly.val, split = ", "))
+    
+    if(length(planarGraphOnly.str) > 1){
+      OM.planarGraphsOnly.str <- paste0("    planarGraphsOnly in TrueFalse,<br>") 
+    }
+    
+    # asymmetric transport
+    asymmetric.val <- gsub("none", "0", input$OM.asymmetric.val)
+    asymmetric.str <- as.integer(unlist(strsplit(asymmetric.val, split = ", ")))
+    
+    if(length(asymmetric.str) > 1){
+      OM.asymmetric.str <- paste0("    asymmetricTransport in Seq(", paste(asymmetric.str, collapse = ", "), "),<br>")
+    }
+  
+    # For each variable, 4 strings are defined and used only if the variable is selected as an objective:
+    # .init.str: variable declaration
+    # .map.str: OM variable mapping
+    # .R.str: R code
+    # .obj.str: opoen mole code to declare the variable as an objective
+    OM.relationCountOut.obj.str  <- ""
+    OM.objectCountOut.obj.str  <- ""
+    OM.disturbanceOut.obj.str  <- ""
+    OM.objectBalanceOut.obj.str  <- ""
+    OM.fragBalanceOut.obj.str  <- ""
+    OM.asymmetricOut.obj.str  <- ""
+    OM.aggregFactorOut.obj.str  <- ""
+    # OM.weightsumOut.obj.str  <- ""
+    OM.cohesion1Out.obj.str  <- ""
+    OM.cohesion2Out.obj.str  <- ""
+    OM.admixtureOut.obj.str  <- ""
+    
+    OM.relationCountOut.map.str  <- ""
+    OM.objectCountOut.map.str  <- ""
+    OM.disturbanceOut.map.str  <- ""
+    OM.objectBalanceOut.map.str  <- ""
+    OM.fragBalanceOut.map.str  <- ""
+    OM.aggregFactorOut.map.str  <- ""
+    # OM.weightsumOut.map.str  <- ""
+    OM.cohesion.map.str  <- ""
+    OM.cohesion1Out.map.str  <- ""
+    OM.cohesion2Out.map.str  <- ""
+    OM.admixtureOut.map.str  <- ""
+    
+    OM.relationCountOut.R.init.str  <- ""
+    OM.objectCountOut.R.init.str  <- ""
+    OM.disturbanceOut.R.init.str  <- ""
+    OM.objectBalanceOut.R.init.str  <- ""
+    OM.fragBalanceOut.R.init.str  <- ""
+    OM.aggregFactorOut.R.init.str  <- ""
+    # OM.weightsumOut.R.init.str  <- ""
+    OM.cohesion.R.init.str  <- ""
+    OM.cohesion1Out.R.init.str  <- ""
+    OM.cohesion2Out.R.init.str  <- ""
+    OM.admixtureOut.R.init.str  <- ""
+    
+    OM.relationCountOut.R.str  <- ""
+    OM.objectCountOut.R.str  <- ""
+    OM.disturbanceOut.R.str  <- ""
+    OM.objectBalanceOut.R.str  <- ""
+    OM.fragBalanceOut.R.str  <- ""
+    OM.aggregFactorOut.R.str  <- ""
+    # OM.weightsumOut.R.str  <- ""
+    OM.cohesion.R.str  <- ""
+    OM.cohesion1Out.R.str  <- ""
+    OM.cohesion2Out.R.str  <- ""
+    OM.admixtureOut.R.str  <- ""
+    
+    OM.relationCountOut.init.str <- ""
+    OM.objectCountOut.init.str <- ""
+    OM.disturbanceOut.init.str <- ""
+    OM.objectBalanceOut.init.str <- ""
+    OM.fragBalanceOut.init.str <- ""
+    OM.aggregFactorOut.init.str <- ""
+    # OM.weightsumOut.init.str  <- ""
+    OM.cohesion1Out.init.str <- ""
+    OM.cohesion2Out.init.str <- ""
+    OM.admixtureOut.init.str <- ""
+    
+    obs.admix <-  round(archeofrag::frag.layers.admixture(graph.selected(), "spatial.variable", verbose = FALSE), 2)
+    obs.cohesion <- round(archeofrag::frag.layers.cohesion(graph.selected(), "spatial.variable", verbose = FALSE), 2)
+    
+    if(input$OM.relationCountOut){ 
+      OM.relationCountOut.init.str <- 'val relationCountOut = Val[Int]<br>' 
+      OM.relationCountOut.map.str  <- '  outputs += relationCountOut.mapped,<br>'
+      OM.relationCountOut.R.init.str <- "            relationCountOut <- -1<br>"
+      OM.relationCountOut.R.str <- "                relationCountOut <- frag.params$edges<br>"
+      
+      OM.relationCountOut.sens <- 0.1
+      if(input$OM.relationCountOut.sens != 0){
+        OM.relationCountOut.sens <- round(input.graph.params()$edges * input$OM.relationCountOut.sens / 100, 0)
+      }
+      OM.relationCountOut.obj.str <- paste0("    relationCountOut evaluate \"relationCountOut.map(x => math.abs(x - ",
+                                          input.graph.params()$edges, ")).max\" under ", OM.relationCountOut.sens, ",<br>")
+    }
+    
+    if(input$OM.objectCountOut){
+      OM.objectCountOut.init.str <- 'val objectCountOut = Val[Int]<br>' 
+      OM.objectCountOut.map.str  <- '  outputs += objectCountOut.mapped,<br>'
+      OM.objectCountOut.R.init.str <- '            objectCountOut   <- -1<br>'
+      OM.objectCountOut.R.str <- '                objectCountOut   <- frag.params$n.components<br>'
+      
+      OM.objectCountOut.sens <- 0.1
+      if(input$OM.objectCountOut.sens != 0){
+        OM.objectCountOut.sens <- round(input.graph.params()$n.components * input$OM.objectCountOut.sens / 100, 0)
+      }
+      OM.objectCountOut.obj.str <- paste0("    objectCountOut evaluate \"objectCountOut.map(x => math.abs(x - ",
+                                          input.graph.params()$n.components, ")).max\" under ", OM.objectCountOut.sens, ",<br>")
+    }
+    
+    if(input$OM.disturbanceOut){
+      OM.disturbanceOut.init.str <- 'val disturbanceOut = Val[Double]<br>' 
+      OM.disturbanceOut.map.str  <- '  outputs += disturbanceOut.mapped,<br>'
+      OM.disturbanceOut.R.init.str <- '            disturbanceOut   <- -1.0<br>'
+      OM.disturbanceOut.R.str <- '                disturbanceOut   <- frag.params$disturbance<br>'
+      
+      OM.disturbanceOut.sens <- 0.001
+      if(input$OM.disturbanceOut.sens != 0){OM.disturbanceOut.sens <- input$OM.disturbanceOut.sens}
+      OM.disturbanceOut.obj.str <- paste0("    disturbanceOut evaluate \"disturbanceOut.map(x => math.abs(x - ",
+                                            input.graph.params()$disturbance, ")).max\" under ", OM.disturbanceOut.sens, ",<br>")
+    }
+    
+    if(input$OM.objectBalanceOut){
+      OM.objectBalanceOut.init.str <- 'val objectBalanceOut = Val[Double]<br>' 
+      OM.objectBalanceOut.map.str  <- '  outputs += objectBalanceOut.mapped,<br>'
+      OM.objectBalanceOut.R.init.str <- '            objectBalanceOut <- -1.0<br>'
+      OM.objectBalanceOut.R.str <- '                objectBalanceOut <- frag.params$components.balance<br>'
+      
+      OM.objectBalanceOut.sens <- 0.001
+      if(input$OM.objectBalanceOut.sens != 0){OM.objectBalanceOut.sens <- input$OM.objectBalanceOut.sens}
+      OM.objectBalanceOut.obj.str <- paste0("    objectBalanceOut evaluate \"objectBalanceOut.map(x => math.abs(x - ",
+                                          input.graph.params()$components.balance, ")).max\" under ", OM.objectBalanceOut.sens, ",<br>")
+    }
+    
+    if(input$OM.fragBalanceOut){
+      OM.fragBalanceOut.init.str <- 'val fragBalanceOut = Val[Double]<br>' 
+      OM.fragBalanceOut.map.str  <- '  outputs += fragBalanceOut.mapped,<br>'
+      OM.fragBalanceOut.R.init.str <- '            fragBalanceOut   <- -1.0<br>'
+      OM.fragBalanceOut.R.str <- '                fragBalanceOut   <- frag.params$balance<br>'
+      
+      OM.fragBalanceOut.sens <- 0.001
+      if(input$OM.fragBalanceOut.sens != 0){OM.fragBalanceOut.sens <- input$OM.fragBalanceOut.sens}
+      OM.fragBalanceOut.obj.str <- paste0("    fragBalanceOut evaluate \"fragBalanceOut.map(x => math.abs(x - ",
+                                          input.graph.params()$balance, ")).max\" under ", OM.fragBalanceOut.sens, ",<br>")
+    }
+    
+    if(input$OM.aggregFactorOut){
+      OM.aggregFactorOut.init.str <- 'val aggregationOut = Val[Double]<br>' 
+      OM.aggregFactorOut.map.str  <- '  outputs += aggregationOut.mapped,<br>'
+      OM.aggregFactorOut.R.init.str <- '            aggregationOut   <- -1.0<br>'
+      OM.aggregFactorOut.R.str <- '                aggregationOut   <- frag.params$aggreg.factor<br>'
+        
+      OM.aggregFactorOut.sens <- 0.001
+      if(input$OM.aggregFactorOut.sens != 0){OM.aggregFactorOut.sens <- input$OM.aggregFactorOut.sens}
+      OM.aggregFactorOut.obj.str <- paste0("    aggregationOut evaluate \"aggregationOut.map(x => math.abs(x - ",
+                                      obs.admix, ")).max\" under ", OM.aggregFactorOut.sens, ",<br>")
+    }
+    # if(input$OM.weightsumOut) OM.weightsumOut.str <- paste0("weightsumOut delta", input$TODO, "under", OM.weightsumOut.sens, ",<br>")
+    
+    if(input$OM.cohesion1Out | input$OM.cohesion2Out) {
+      OM.cohesion.R.str <- '                cohesion.results <- frag.layers.cohesion(g, \'layer\')<br><br>'
+    }
+    
+    if(input$OM.cohesion1Out) {
+      
+      OM.cohesion1Out.sens <- 0.001
+      if(input$OM.cohesion1Out.sens != 0){OM.cohesion1Out.sens <- input$OM.cohesion1Out.sens}
+      
+      OM.cohesion1Out.init.str <- 'val cohesion1Out = Val[Double]<br>' 
+      OM.cohesion1Out.map.str  <- '  outputs += cohesion1Out.mapped,<br>'
+      OM.cohesion1Out.R.init.str <- '            cohesion1Out     <- -1.0<br>'
+      OM.cohesion1Out.R.str <- '                cohesion1Out     <- cohesion.results[1]<br>'
+      OM.cohesion1Out.obj.str <- paste0("    cohesion1Out evaluate \"cohesion1Out.map(x => math.abs(x - ",
+                                        obs.cohesion[1], ")).max\" under ", OM.cohesion1Out.sens, ",<br>")
+    }
+    
+    if(input$OM.cohesion2Out){
+      
+      OM.cohesion2Out.sens <- 0.001
+      if(input$OM.cohesion2Out.sens != 0){OM.cohesion2Out.sens <- input$OM.cohesion2Out.sens}
+      
+      OM.cohesion2Out.init.str <- 'val cohesion2Out = Val[Double]<br>' 
+      OM.cohesion2Out.map.str  <- '  outputs += cohesion2Out.mapped,<br>'
+      OM.cohesion2Out.R.init.str <- '            cohesion2Out     <- -1.0<br>'
+      OM.cohesion2Out.R.str <- '                cohesion2Out     <- cohesion.results[2]<br>'
+      OM.cohesion2Out.obj.str <- paste0("    cohesion2Out evaluate \"cohesion2Out.map(x => math.abs(x - ",
+                                        obs.cohesion[2], ")).max\" under ",  OM.cohesion2Out.sens, ",<br>")
+    }
+    
+    if(input$OM.admixtureOut){
+      
+      OM.admixtureOut.sens <- 0.001
+      if(input$OM.admixtureOut.sens != 0){OM.admixtureOut.sens <- input$OM.admixtureOut.sens}
+      
+      OM.admixtureOut.init.str <- 'val admixtureOut = Val[Double]<br>'
+      OM.admixtureOut.map.str  <- '  outputs += admixtureOut.mapped,<br>'
+      OM.admixtureOut.R.init.str <- '            admixtureOut     <- -1.0<br>'
+      OM.admixtureOut.R.str <- '                admixtureOut     <- frag.layers.admixture(g, \'layer\')<br>'
+      OM.admixtureOut.obj.str <- paste0("    admixtureOut evaluate \"admixtureOut.map(x => math.abs(x - ",
+                                        obs.admix, ")).max\" under ", OM.admixtureOut.sens, ",<br>")
+    }
+    
+    # Default initialisation values for ranges: by default, the value read on the studied graph. However, if the values selected by the user are equal, replace the default value by this selected value
+    fragmentsBalance.default <- input.graph.params()$balance
+    if(input$OM.fragmentsBalance.val[1] == input$OM.fragmentsBalance.val[2]){
+      fragmentsBalance.default <- input$OM.fragmentsBalance.val[1]
+    }
+    
+    objectBalance.default <- input.graph.params()$components.balance 
+    if(input$OM.objectBalance.val[1] == input$OM.objectBalance.val[2]){
+      objectBalance.default <-   input$OM.objectBalance.val[1]
+    }
+    
+    disturbance.default <- input.graph.params()$disturbance 
+    if(input$OM.disturbance.val[1] == input$OM.disturbance.val[2]){
+      disturbance.default <-   input$OM.disturbance.val[1]
+    }
+    
+    aggregFactor.default <- input.graph.params()$aggreg.factor 
+    if(input$OM.aggregFactor.val[1] == input$OM.aggregFactor.val[2]){
+      aggregFactor.default <-  input$OM.aggregFactor.val[1]
+    }
+    
+    
+    # check whether ranges of value are available for origins variables
+    if(input$OM.fragmentsBalance.val[1] != input$OM.fragmentsBalance.val[2]){
+      OM.fragmentsBalance.str <- paste0("    fragmentsBalance in (", input$OM.fragmentsBalance.val[1], " to ",
+                                        input$OM.fragmentsBalance.val[2], "),<br>")
+    }
+    
+    if(input$OM.objectBalance.val[1] != input$OM.objectBalance.val[2]){
+      OM.objectBalance.str <- paste0("    objectBalance in (", input$OM.objectBalance.val[1], " to ",
+                                         input$OM.objectBalance.val[2], "),<br>")
+    }
+    
+    if(input$OM.disturbance.val[1] != input$OM.disturbance.val[2]){ 
+      OM.disturbance.str <- paste0("    disturbance in (", input$OM.disturbance.val[1], " to ",
+                                   input$OM.disturbance.val[2], "),<br>")
+    }
+    
+    if(input$OM.aggregFactor.val[1] != input$OM.aggregFactor.val[2]){ 
+      OM.aggregFactor.str <- paste0("    aggregation in (", input$OM.aggregFactor.val[1], " to ",
+                                    input$OM.aggregFactor.val[2], "),<br>")
+    }
+    
+    # nfrag string, determining the number of fragments to remove
+    frag.reduce.str <- paste0(
+    '                g <- frag.graph.reduce(graph = g,<br>',
+    '                                       n.frag.to.remove = igraph::gorder(g) - finalFragmentsNumberMin,<br>',
+    '                                       conserve.objects.nr = preserveObjectsNumber)<br>')
+                              
+    if(finalFragCountMin != finalFragCountMax){
+      frag.reduce.str <- paste0(
+        '                n.frag <- igraph::gorder(g) - sample(seq.int(finalFragmentsNumberMin, finalFragmentsNumberMax), 1)<br>',
+        '                g <- frag.graph.reduce(graph = g,<br>',
+        '                                       n.frag.to.remove = n.frag,<br>',
+        '                                       conserve.objects.nr = preserveObjectsNumber)<br>')
+    }
+    
+    # .. settings ----
+    OM.islands.str <- ""
+    if(input$OM.islands > 0){
+      OM.islands.str <- paste0(" by Island(", input$OM.islands, " minutes) ")
+    }
+    
+    # .. model ----
+    om.code <- paste0('<pre>',
+           '// Input values<br>',
+           'val layerNumber = Val[Int]<br>',
+           'val objectsNumber = Val[Int]<br>',
+           'val fragmentsNumber = Val[Int]<br>',
+           'val finalFragmentsNumberMin = Val[Int]<br>',
+           OM.finalFragmentsNumberMax.init.str,
+           'val objectBalance = Val[Double]<br>',
+           'val fragmentsBalance = Val[Double]<br>',
+           'val disturbance = Val[Double]<br>',
+           'val aggregation = Val[Double]<br>',
+           'val asymmetricTransport = Val[Int]<br>',
+           'val planarGraphsOnly = Val[Boolean]<br>',
+           'val preserveObjectsNumber = Val[Boolean]<br>',
+           'val mySeed = Val[Int]<br>',
+           '<br>',
+           '// Output values<br>',
+           OM.cohesion1Out.init.str,
+           OM.cohesion2Out.init.str,
+           OM.admixtureOut.init.str,
+           OM.relationCountOut.init.str,
+           OM.objectCountOut.init.str,
+           OM.objectBalanceOut.init.str,
+           OM.fragBalanceOut.init.str,
+           OM.disturbanceOut.init.str,
+           OM.aggregFactorOut.init.str,
+           '<br>',
+           'val local = LocalEnvironment(', input$OM.parallelize, ')  // Number of cores to use. Adjust as needed<br>',
+           '<br>',
+           'val archeofrag =  RTask(<br>',
+           '  containerSystem = SingularityFlatImage(), // optionnal <br>',
+           '  script = """<br>',
+           '            library(archeofrag)<br>',
+           '            # Declare default values:<br>',
+           OM.cohesion1Out.R.init.str,
+           OM.cohesion2Out.R.init.str,
+           OM.admixtureOut.R.init.str,
+           OM.relationCountOut.R.init.str,
+           OM.objectCountOut.R.init.str,
+           OM.objectBalanceOut.R.init.str,
+           OM.disturbanceOut.R.init.str,
+           OM.fragBalanceOut.R.init.str,
+           OM.aggregFactorOut.R.init.str,
+           '            try({<br>',
+           '                # Generate fragmentation graph:<br>',
+           '                g <- frag.simul.process(initial.layers = layerNumber,<br>',
+           '                                        n.components = objectsNumber,<br>',
+           '                                        vertices = fragmentsNumber,<br>',
+           '                                        edges = Inf,<br>',
+           '                                        balance = fragmentsBalance,<br>',
+           '                                        components.balance = objectBalance,<br>',
+           '                                        disturbance = disturbance,<br>',
+           '                                        aggreg.factor = aggregation,<br>',
+           '                                        asymmetric.transport.from = asymmetricTransport,<br>',
+           '                                        planar = planarGraphsOnly <br>',
+           '                                        )<br>',
+           '                # Randomly delete fragments:<br>',
+           frag.reduce.str,
+           '                # Measurements:<br>',
+           '                frag.params <- frag.get.parameters(g, \'layer\')<br>',
+           '<br>',
+           OM.cohesion.R.str,
+           OM.cohesion1Out.R.str,
+           OM.cohesion2Out.R.str,
+           OM.admixtureOut.R.str,
+           OM.relationCountOut.R.str,
+           OM.objectCountOut.R.str,
+           OM.objectBalanceOut.R.str,
+           OM.disturbanceOut.R.str,
+           OM.fragBalanceOut.R.str,
+           OM.aggregFactorOut.R.str,
+           '            }, silent = FALSE)<br>',
+           '            """,<br>',
+           '  install = Seq(<br>',
+           '    """R --slave -e \'install.packages("BiocManager") ; library("BiocManager") ; BiocManager::install("RBGL")\' """,<br>',
+           '    """R --slave -e \'install.packages("remotes", dependencies = T)\' """,<br>',
+           '    """R --slave -e \'library(remotes); remotes::install_github("sebastien-plutniak/archeofrag", force=TRUE)\' """<br>',
+           '  )<br>',
+           ') set (<br>',
+           '  inputs += mySeed.mapped,<br>',
+           '  inputs += objectsNumber.mapped,<br>',
+           '  inputs += fragmentsNumber.mapped,<br>',
+           '  inputs += finalFragmentsNumberMin.mapped,<br>',
+           OM.finalFragmentsNumberMax.map.str,
+           '  inputs += preserveObjectsNumber.mapped,<br>',
+           '  inputs += fragmentsBalance.mapped,<br>',
+           '  inputs += objectBalance.mapped,<br>',
+           '  inputs += disturbance.mapped,<br>',
+           '  inputs += layerNumber.mapped,<br>',
+           '  inputs += aggregation.mapped,<br>',
+           '  inputs += planarGraphsOnly.mapped,<br>',
+           '  inputs += asymmetricTransport.mapped,<br>',
+           OM.cohesion1Out.map.str,
+           OM.cohesion2Out.map.str,
+           OM.admixtureOut.map.str,
+           OM.relationCountOut.map.str,
+           # OM.fragmentCountOut.map.str,
+           OM.objectCountOut.map.str,
+           OM.objectBalanceOut.map.str,
+           OM.disturbanceOut.map.str,
+           OM.fragBalanceOut.map.str,
+           OM.aggregFactorOut.map.str,
+           # OM.weightsumOut.map.str,
+           '  // Default values, taken from the studied graph:<br>',
+           '  mySeed := 1,<br>',
+           '  layerNumber := 1,<br>',
+           '  objectsNumber := ', input.graph.params()$n.components, ',<br>',
+           '  fragmentsNumber := ', input.graph.params()$vertices, ',<br>', 
+           OM.finalFragmentsNumberMinOut.str, 
+           OM.finalFragmentsNumberMaxOut.str, 
+           '  preserveObjectsNumber := ', preserveObjectsNumber.str[1], ',<br>',
+           '  aggregation := ', aggregFactor.default, ',<br>', 
+           '  objectBalance := ', objectBalance.default, ',<br>', 
+           '  fragmentsBalance := ', fragmentsBalance.default, ',<br>', 
+           '  disturbance := ', disturbance.default, ',<br>', 
+           '  planarGraphsOnly := ', planarGraphOnly.str[1], ',<br>',
+           '  asymmetricTransport := ', asymmetric.str[1], '<br>',
+           ')<br>',
+           '<br>',
+           '<br>',
+           '// model settings<br>',
+           'HDOSEEvolution(<br>',
+           '  evaluation = archeofrag,<br>',
+           '  parallelism = ', input$OM.parallelize, ',                  //  nr of workers for parallelization. Adjust as needed<br>',
+           '  termination = ', input$OM.replications, ',                  //  nr of executions. Adjust as needed<br>',
+           '  origin = Seq(<br>',   # .... origin ----
+           OM.layerNumber.str,
+           OM.objectsNumber.str,
+           OM.fragmentsNumber.str,
+           OM.fragmentsBalance.str,
+           OM.objectBalance.str,
+           OM.disturbance.str,
+           OM.aggregFactor.str,
+           OM.asymmetric.str,
+           OM.preserveObjectsNumber.str,
+           OM.planarGraphsOnly.str,
+           '  ),<br>',
+           '  objective = Seq(<br>', # .... objective ----
+           OM.cohesion1Out.obj.str,
+           OM.cohesion2Out.obj.str,
+           OM.admixtureOut.obj.str,
+           OM.relationCountOut.obj.str,
+           OM.objectCountOut.obj.str,
+           OM.disturbanceOut.obj.str,
+           OM.aggregFactorOut.obj.str,
+           OM.objectBalanceOut.obj.str,
+           OM.fragBalanceOut.obj.str,
+           # OM.weightsumOut.str,
+           '  ),<br>',
+           '  stochastic = Stochastic(seed = mySeed)<br>',
+           ') ', OM.islands.str,
+           'hook (workDirectory / "hdose-results", frequency = 100) on local // adjust execution machine',
+           "</pre>")
+    
+    gsub("\\(0 ", "\\(0.0 ", om.code)   # format 0 values as double for openMOLE
+  }) # end reactive
+
+  output$openMOLE.code <- reactive({openMOLE.code()})
+    
+  observeEvent(input$OMcode.copy.button, {
+    OMCode.plaintext <- openMOLE.code()
+    
+    OMCode.plaintext <- gsub("<br>", "\n", OMCode.plaintext)
+    OMCode.plaintext <- gsub("</?pre>", "", OMCode.plaintext)
+    
+    session$sendCustomMessage("txt", OMCode.plaintext)
+  })
+  
+} # end server
