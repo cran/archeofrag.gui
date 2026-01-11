@@ -1,32 +1,34 @@
 server <- function(input, output, session) { 
   .data <- NULL  
   i <- NULL  
+  x <- NULL
   value <- NULL
+  
   # parallelize box, count n workers
   output$parallelize.box <- renderUI({
     span(`data-toggle` = "tooltip", `data-placement` = "bottom",
-         title = "Enabling parallelization uses half of the available cores to speed up the computation.",
+         title = "Enabling parallelization using half of the available cores to speed up computations.",
           checkboxInput("parallelize",
-                        paste0("Parallelize (using ",
-                               foreach::getDoParWorkers(), " workers)"), value = TRUE)
+                        paste0("Parallelize (", foreach::getDoParWorkers(), "/", 
+                                                parallel::detectCores(), " cores)"), value = TRUE)
     )
   })
   
   # rubish generator
   generate.rubish <- function(){
     l13 <- archeofrag::frag.simul.process(n.components=24, vertices=70, disturbance=.4, balance = .6)
-    igraph::V(l13)[igraph::V(l13)$layer == 2]$layer <- 3
+    igraph::V(l13)[igraph::V(l13)$layer == "2"]$layer <- "3"
     
     l24 <- archeofrag::frag.simul.process(n.components=20, vertices=44, balance=.6, disturbance=0)
-    igraph::V(l24)[igraph::V(l24)$layer == 1]$layer <- 4
+    igraph::V(l24)[igraph::V(l24)$layer == "1"]$layer <- "4"
     igraph::V(l24)$name <- paste0(igraph::V(l24)$name, "l24")
     
     l5 <- archeofrag::frag.simul.process(n.components=5, vertices=20)
-    igraph::V(l5)$layer  <- 5
+    igraph::V(l5)$layer  <- "5"
     igraph::V(l5)$name <- paste0(igraph::V(l5)$name, "l5")
     
     l6 <- archeofrag::frag.simul.process(n.components=6, vertices=15)
-    igraph::V(l6)$layer  <- 6
+    igraph::V(l6)$layer  <- "6"
     igraph::V(l6)$name <- paste0(igraph::V(l6)$name, "l6")
     
     # merge
@@ -202,25 +204,76 @@ server <- function(input, output, session) {
     list("objects.df"=objects.df, "edges.df"=g.data$edges.df)
   })
   
+  graph.data3 <- reactive({ # subset data ----
+    req(graph.data2, input$subset.variable)
+    
+    g.data <- graph.data2()
+    
+    objects.df <- g.data$objects.df
+    edges.df <- g.data$edges.df
+    
+    subset.values <- input$subset.values
+    
+    if(input$subset.variable == "-") subset.values <- NULL
+    
+    if( ! is.null(subset.values)){
+      expr <- paste0("objects.df[objects.df$", input$subset.variable, " %in% input$subset.values, ]")
+      objects.df <- eval(parse(text = expr))
+      
+      edges.df <- edges.df[edges.df[, 1] %in% objects.df$id, ]
+      edges.df <- edges.df[edges.df[, 2] %in% objects.df$id, ]
+    }
+    
+    list("objects.df"=objects.df, "edges.df"=edges.df)
+  })
   
   
   # SELECTORS ----
   # ... pair of units selector ----
   output$layers.selector <- renderUI({
-    req(graph.data())
+    req(graph.list())
     
     g.list <- graph.list()
     
     choices.val <- seq_len(length(g.list))
     names(choices.val) <- names(g.list)
     
-    selectInput("units.pair", "Pair of spatial units",
+    selectInput("units.pair", "Pair of spatial units to study",
                 choices = choices.val, width= "90%")
   })
   
+  # ... sub-setting variable selector ----
+  output$subset.selector <- renderUI({
+      req(graph.data())
+      
+      g.data <- graph.data()
+      objects.df <- g.data$objects.df
+      
+      choices.val <- names(objects.df)
+      choices.val <- choices.val[ ! tolower(choices.val) == "id"]
+      names(choices.val) <- names(choices.val)
+      choices.val <- c("-", choices.val)
+      
+      selectInput("subset.variable", "Subset by (optional)",
+                  choices = choices.val, width= "90%")
+    })
+  
+  output$subset.options <- renderUI({
+    req(input$subset.variable)
+    
+    if(input$subset.variable == "-") return()
+    
+    g.data <- graph.data()
+    objects.df <- g.data$objects.df
+    values <- sort(unique(eval(parse(text = paste0("objects.df$", input$subset.variable)))))
+
+    checkboxGroupInput("subset.values", "", choices = values, selected = values) 
+  })
+  
+  
   # ... morpho selector ----
   output$morpho.selector <- renderUI({
-    req(graph.data2())
+    req(graph.data3())
     
     choices.val <- c("-", names(graph.data()$objects.df))
     choices.val <- choices.val[ ! tolower(choices.val) == "id"]
@@ -231,7 +284,7 @@ server <- function(input, output, session) {
   
   # ... x selector ----
   output$x.selector <- renderUI({
-    req(graph.data2())
+    req(graph.data3())
     
     choices.val <- c("-", names(graph.data()$objects.df))
     choices.val <- choices.val[ ! tolower(choices.val) == "id"]
@@ -242,7 +295,7 @@ server <- function(input, output, session) {
   
   # ... y selector ----
   output$y.selector <- renderUI({
-    req(graph.data2())
+    req(graph.data3())
     
     choices.val <- c("-", names(graph.data()$objects.df))
     choices.val <- choices.val[ ! tolower(choices.val) == "id"]
@@ -253,7 +306,7 @@ server <- function(input, output, session) {
   
   # ... z selector ----
   output$z.selector <- renderUI({
-    req(graph.data2())
+    req(graph.data3())
     
     choices.val <- c("-", names(graph.data()$objects.df))
     choices.val <- choices.val[ ! tolower(choices.val) == "id"]
@@ -267,12 +320,13 @@ server <- function(input, output, session) {
   graph.complete.init <- reactiveVal() # save copy to retrieve it with the 'reset' button
 
   observe({ 
-    req(graph.data2, input$spatial.variable)
-    g.data <- graph.data2()
+    req(graph.data3, input$spatial.variable)
+    g.data <- graph.data3()
+    if(is.null(g.data) | is.null(g.data$objects.df)) return()
     
-    try(graph <- archeofrag::make_frag_object(g.data$edges.df, fragments = g.data$objects.df), silent = T)
+    try(graph <- archeofrag::make_frag_object(g.data$edges.df, fragments = g.data$objects.df), silent = TRUE)
     if( ! exists("graph")){
-      # showNotification(geterrmessage(), duration = 10, type = "error")
+      showNotification(geterrmessage(), duration = 10, type = "error")
       return()
     }
     
@@ -309,18 +363,26 @@ server <- function(input, output, session) {
 
     pairs <- utils::combn(sort(unique(igraph::V(graph)$spatial.variable)), 2)
     
-    g.list <- lapply(seq_len(ncol(pairs)), function(x,
-                                                    morpho.var = input$morpho.variable, 
-                                                    x.var = input$x.variable, 
-                                                    y.var = input$y.variable, 
-                                                    z.var = input$z.variable){    
+    morpho.variable <- input$morpho.variable
+    x.variable <- input$x.variable
+    y.variable <- input$y.variable
+    z.variable <- input$z.variable
+    
+    extract.pair.graph <- function(x){ # this function includes calls to global variables 
       g <- archeofrag::frag.get.layers.pair(graph, "spatial.variable", pairs[, x], verbose = FALSE)
       if(is.null(g)){ return() }
       if(length(unique(igraph::V(g)$spatial.variable)) != 2){ return() }
       
-      archeofrag::frag.edges.weighting(g, "spatial.variable", morphometry = morpho.var, 
-                                       x = x.var, y = y.var, z = z.var, verbose = FALSE)
-    })
+      archeofrag::frag.edges.weighting(g, "spatial.variable", morphometry = morpho.variable, 
+                                       x = x.variable, y = y.variable, z = z.variable, verbose = FALSE)
+    }
+    
+    if(input$parallelize){
+      g.list <- foreach::foreach(x = seq_len(ncol(pairs))) %dopar% { extract.pair.graph(x) }
+    } else {
+      g.list <- lapply(seq_len(ncol(pairs)), function(x) extract.pair.graph(x))
+    }
+    
     names(g.list) <- sapply(seq_len(ncol(pairs)), function(x)
       paste(pairs[1, x], "/", pairs[2, x]))
     
@@ -362,7 +424,7 @@ server <- function(input, output, session) {
   })
   
   output$n.final.fragments <- renderUI({
-    req(graph.list())
+    req(input.graph.params())
     numericInput("n.final.fragments", "Final fragments count", value = input.graph.params()$vertices, width = "100%")
   })
   
@@ -411,14 +473,16 @@ server <- function(input, output, session) {
       graph.data <- graph.data()
       fragments.df <- graph.data$objects.df
       edges.df <- graph.data$edges.df
+      graph.complete <- graph.complete()
+      
       HTML(paste0(" <div align=left>
                   <h1>Data set presentation: ", comment(fragments.df)[1], "</h1>",
                   "<ul>",
                     "<li><b>Site</b>: ", comment(fragments.df)[1], "</li>",
                     "<li><b>Period</b>: ", comment(fragments.df)[3], "</li>",
                     "<li><b>Material</b>: ", comment(fragments.df)[2], "</li>",
-                    "<li><b>Fragments count</b>: ", nrow(fragments.df), "</li>",
-                    "<li><b>Connection count</b>: ", nrow(edges.df), "</li>",
+                    "<li><b>Fragments count</b>: ", igraph::gorder(graph.complete), "</li>",
+                    "<li><b>Connection count</b>: ", igraph::gsize(graph.complete), "</li>",
                     "<li><b>Reference</b>: see the 'References' tab</li>",
                   "</ul></div>"
            ))
@@ -447,93 +511,295 @@ server <- function(input, output, session) {
         "Cohesion 1st unit" = cohesion[1],
         "Cohesion 2nd unit" = cohesion[2],
         "Cohesion diff" = cohesion.diff,
-        "Admixture" =  round(archeofrag::frag.layers.admixture(g, "spatial.variable", verbose = FALSE), 2)
+        "Admixture" =  round(archeofrag::frag.layers.admixture(g, "spatial.variable", verbose = FALSE), 3)
       )
     }
     
-    df <- lapply(g.list, make.stat.table)
-    df <- do.call(rbind, df)
+    if(input$parallelize){
+      df <- foreach::foreach(g = g.list, .combine = "rbind", .errorhandling = "remove") %dopar% { make.stat.table(g) }
+    } else{
+      df <- sapply(g.list, function(g) make.stat.table(g))
+      df <- data.frame(t(df))
+      df[, seq(2, ncol(df))] <- apply(df[, seq(2, ncol(df))], 2, as.numeric)
+      df[, 1] <- as.character(df[, 1])
+    }
     colnames(df) <- gsub("\\.", " ", colnames(df))
     df
   })
   
   output$resultsTab <- DT::renderDT({ 
-    DT::datatable(stats.table(), rownames=F,  escape=F, style = "default", selection = 'none',
+    DT::datatable(stats.table(), rownames = FALSE, escape = FALSE, style = "default", selection = 'none',
                   options = list(dom = 'tp'))
   })
   
-  admixTab <- reactive({  # admix table ----
-    req(stats.table(), graph.data2())
+  output$download.measurements.tab <- downloadHandler(
+    filename = paste0("archeofrag-measurements-", input$spatial.variable, ".csv"),
+    content = function(file) {
+      write.csv(stats.table(), file, row.names = TRUE)
+    }
+  )
+  # spatial units ranking ----
+  output$unit.ranks <- renderTable({
+    req(stats.table)
+    
+    stats.tab <- stats.table()
+    if(nrow(stats.tab) == 1) return()
+    
+    stats.tab$unit1 <- gsub("^(.*) / (.*)$", "\\1", stats.tab[, 1])
+    stats.tab$unit2 <- gsub("^(.*) / (.*)$", "\\2", stats.tab[, 1])
+    
+    sp.units <- unique(c(stats.tab$unit1, stats.tab$unit2))
+    
+    count <- apply(stats.tab, 1, function(x) x[c(11, 12)][order(x[c(7, 8)])[2] ] )
+    count <- sort(table(count), decreasing = TRUE)
+    count <- t(as.data.frame(count, stringsAsFactors = FALSE))
+    
+    sp.units <- sp.units[ ! sp.units %in% count[1, ]]
+    
+    count <- cbind(count, rbind(sp.units, 0))
+    count2 <- as.numeric(count[2, ])
+    names(count2) <- count[1, ]
+    
+    operators <- sapply(seq_len(length(count2) -1) ,  function(x)  count2[x + 1] - count2[x])
+    operators.char <- operators
+    operators.char[operators < 0 ] <- ">"
+    operators.char[operators == 0 ] <- "="
+    operators.char <- c(operators.char, "")
+    paste0(c(rbind(names(count2), operators.char)), collapse = " " ) 
+    
+    res <- rbind(
+      c(rbind(names(count2), operators.char)),
+      c(rbind(count2, rep("", length(count2))))
+    )
+  
+   res <- data.frame(res)
+   colnames(res) <- res[1,]
+   rownames(res) <- c("", "Count")
+   res[-1, ]
+  }, rownames=TRUE, align="r")
+  
+  
+  
+  dissimilarityTab <- reactive({  # dissimilarity table ----
+    req(stats.table(), graph.data3())
     stats.table <- stats.table()
     
-    stats.table$unit1 <- gsub("(.*) / .*", "\\1", stats.table[,1])
-    stats.table$unit2 <- gsub("^.* / (.*$)", "\\1", stats.table[,1])
+    stats.table$unit1 <- gsub("(.*) / .*", "\\1", stats.table[, 1])
+    stats.table$unit2 <- gsub("^.* / (.*$)", "\\1", stats.table[, 1])
     
     pairs <- utils::combn(sort(unique(c(stats.table$unit1, stats.table$unit2))), 2)
     pairs <- t(as.data.frame(pairs))
-    pairs <- rbind(pairs, pairs[, 2:1])
+    pairs <- rbind(pairs, pairs[, c(2, 1)])
     
     colnames(pairs) <- c("unit1", "unit2")
     pairs <- merge(pairs,
                    stats.table[, c("Admixture", "unit1", "unit2")], 
-                   by = c("unit1", "unit2"), all.x = T)
+                   by = c("unit1", "unit2"), all.x = TRUE)
     
     if(input$normalise.diss){
-      pairs$Admixture <- ( pairs$Admixture - min(pairs$Admixture, na.rm = T)) / 
-        (max(pairs$Admixture, na.rm = T) - min(pairs$Admixture, na.rm = T))
+      pairs$Admixture <- ( pairs$Admixture - min(pairs$Admixture, na.rm = TRUE)) / 
+        (max(pairs$Admixture, na.rm = TRUE) - min(pairs$Admixture, na.rm = TRUE))
     }
     
     diss <- stats::reshape(pairs, timevar = "unit1", idvar = "unit2",  v.names = "Admixture", direction = "wide")
+    diss <- as.matrix(diss)
     colnames(diss) <- gsub("^Admixture.", "", colnames(diss))
     rownames(diss) <- diss[, 1]
     diss <- diss[, -1]
+    diss <- diss[ order(rownames(diss)), order(colnames(diss))]
+    diss <- apply(diss, 2,  as.numeric)
+    rownames(diss) <- colnames(diss)
     
-    diss[ order(rownames(diss)), order(colnames(diss))]
-  })
-  
-  output$admixTab <- renderTable({ 
-    req(admixTab())
-    admixTab()
-  }, rownames = T, colnames = T, na = "-")
-  
-  # admix plot ----
-  admix.dendr <- reactive({  
-    req(admixTab())
-    admixTab <- 1 - admixTab()
-    admixTab[is.na(admixTab)] <- 1
-    
-    admixTab <- stats::as.dist(admixTab)
-    
-    dend.plot <- NULL
-    eval(parse(text = paste0(
-    "dend.plot <- stats::as.dendrogram(stats::hclust(admixTab, method = \"", input$clustmethod, "\"))"
-    )))
-    sort(dend.plot, decreasing = T)
-  })
-  
-  output$admix.plot <- renderPlot({  
-    req(admix.dendr)
-    
-    method.name <- c(UPGMA = "average", WPGMA = "mcquitty", "Single linkage" = "single", "Complete linkage" = "complete",  Ward = "ward.D2")
-    method.name <- names(method.name)[method.name == input$clustmethod]
-    
-    plot(admix.dendr(), horiz = T, main = input$spatial.variable,
-         xlab = paste0("Dissimilarity: 1 - admixture. Clustering method: ", method.name,
-                      "\nAn alphanumerical ordering constraint is applied to the branches of the dendrogram")) 
+    diag(diss) <- 1
+    diss[is.na(diss)] <- 0
+    diss[upper.tri(diss)] <- NA
+    1 - diss
   })
   
   
-  output$admix.download <- downloadHandler(
-    filename = paste0("archeofrag-dissimilarity-",  input$spatial.variable, ".svg"),
+  output$dissimilarityTab <- renderTable({ 
+    req(dissimilarityTab())
+    dissimilarityTab()
+  }, rownames = TRUE, colnames = TRUE, na = "-")
+  
+
+  output$download.dissimilarityTab <- downloadHandler(
+    filename = paste0("archeofrag-dissimilarity-", input$spatial.variable, ".csv"),
     content = function(file) {
-      grDevices::svg(file)
-      plot(admix.dendr(), horiz = T, main = input$spatial.variable)
+      write.csv(dissimilarityTab(), file, row.names = TRUE)
+    }
+  )
+  
+  
+  # tanglegram ----
+  
+clustering.method.names <- c("UPGMA" = "average", "WPGMA" = "mcquitty", "Single linkage" = "single", "Complete linkage" = "complete",  Ward = "ward.D2")
+  
+  expected.dendrogram <- reactive({
+    req(dissimilarityTab())
+    expected.dissimilarityTab <- dissimilarityTab()
+    expected.dissimilarityTab[ lower.tri(expected.dissimilarityTab, diag = FALSE) ] <- 1
+    diag(expected.dissimilarityTab) <- 0
+    
+    expected.dissimilarityTab <- stats::as.dist(expected.dissimilarityTab)
+    
+    stats::as.dendrogram(stats::hclust(expected.dissimilarityTab, method = "average"))
+  })
+  
+  
+  observed.dendrograms <- reactive({
+    req(dissimilarityTab())
+    
+    observed.dissimilarityTab <- dissimilarityTab()
+    observed.dissimilarityTab <- stats::as.dist(observed.dissimilarityTab)
+    
+    # compute clusterings and dendrograms: 
+    dendrograms.list <- lapply(clustering.method.names, function(method)  
+      stats::as.dendrogram(stats::hclust(observed.dissimilarityTab, method = method)))
+  
+    names(dendrograms.list) <- clustering.method.names
+    dendrograms.list
+  })
+  
+    
+  selected.clustering.method.name <- reactive({
+    names(clustering.method.names)[clustering.method.names == input$clustmethod]
+  })
+  
+
+  clustering.stats.df <- reactive({
+    req(observed.dendrograms(), expected.dendrogram(), dissimilarityTab())
+    
+    observed.dendrograms <- observed.dendrograms()
+    expected.dendrogram <-  expected.dendrogram()
+    
+    # compute entanglement:
+    entanglement.values <- sapply(seq_len(length(clustering.method.names)), function(x) 
+      dendextend::entanglement(sort(observed.dendrograms[[x]]), sort(expected.dendrogram)))
+    entanglement.values <- round(entanglement.values, 2)
+
+    # turn dissimilarity tab into distance tab
+    observed.dissimilarityTab <- dissimilarityTab()
+    observed.dissimilarityTab <- stats::as.dist(observed.dissimilarityTab)
+    
+    # compute cophenetic correlations:
+    cophenetic.cor.values <- sapply(seq_len(length(clustering.method.names)), function(x) 
+    stats::cor(observed.dissimilarityTab, stats::cophenetic(stats::as.hclust(observed.dendrograms[[x]]))))
+    cophenetic.cor.values <- round(cophenetic.cor.values, 2)
+    
+    # compute Baker's Gamma  correlations:
+    bakers.cor.values <- sapply(seq_len(length(clustering.method.names)), function(x) 
+      dendextend::cor_bakers_gamma(expected.dendrogram, observed.dendrograms[[x]]))
+    bakers.cor.values <- round(bakers.cor.values, 2)
+    
+    # output table
+    stats.df <- data.frame("Method" = names(clustering.method.names),
+                           "Cophenetic correlation" = cophenetic.cor.values,
+                           "Entanglement" =  entanglement.values, 
+                           "Baker's Gamma correlation" = bakers.cor.values,
+                           check.names = FALSE)
+    stats.df[order(stats.df$Entanglement, decreasing = FALSE), ]
+  })
+  
+  output$clustering.stats <- renderDT({
+    
+    tab <- clustering.stats.df()
+    
+    sketch <-  "<table class='display'>
+                  <thead>
+                    <tr>
+                      <th rowspan=2> Method</th>
+                      <th>Observed tree</th>
+                      <th colspan=2> Observed and expected trees</th>
+                    </tr>
+                    <tr>
+                      <th>Cophenetic correlation</th>
+                      <th>Entanglement</th>
+                      <th>Baker's Gamma correlation</th>
+                    </tr>
+                  </thead>
+                </table>"
+    
+    
+    
+    DT::datatable(tab, container = sketch, rownames = FALSE, style = "default", selection = 'none', options = list(dom = 't'))
+  })
+    
+    
+  output$admix.clustering.selector <- renderUI({
+    clustering.method.options <- clustering.method.names
+    selectInput("clustmethod", "Clustering method", choices = clustering.method.options)
+  })  
+  
+  
+  selected.tanglegrams <- reactive({
+    req(observed.dendrograms(), expected.dendrogram(), input$clustmethod)
+
+    observed.dendrograms <- observed.dendrograms()
+    expected.dendrogram <- expected.dendrogram()
+    
+    list(observed.dendrograms[ names(observed.dendrograms) == input$clustmethod ][[1]],
+         expected.dendrogram)
+  })
+  
+  
+  output$tanglegram.plot <- renderPlot({
+    req(selected.tanglegrams())
+    
+    clustering.stats.df <- clustering.stats.df()
+    idx <- clustering.stats.df[, 1] == names(clustering.method.names)[which(clustering.method.names == input$clustmethod)]
+    
+    dendextend::tanglegram(selected.tanglegrams()[[1]], selected.tanglegrams()[[2]],
+                           sort = TRUE,
+                           main = toupper(input$spatial.variable),
+                           margin_bottom = 11, margin_inner = 12,
+                           lab.cex = 1.4, cex_main = 1.6, cex_sub = 1,
+                           main_left = "Observed", main_right = "Expected",
+                           highlight_branches_lwd = FALSE, highlight_distinct_edges = FALSE)
+    graphics::mtext(paste0("\n\n\n",
+                 "Dissimilarity: 1 - admixture",
+                 "\n",
+                 "Clustering method: ", selected.clustering.method.name(),
+                 "\n",
+                 "Cophenetic correlation: ", clustering.stats.df[idx, ]$"Cophenetic correlation",
+                 "\n",
+                 "Entanglement value: ", clustering.stats.df[idx, ]$Entanglement,
+                 "\n",
+                 "Baker correlation: ", clustering.stats.df[idx, ]$"Baker's Gamma correlation"
+    ), side =  1)
+  })
+  
+  
+  output$tanglegram.download <- downloadHandler(
+    filename = paste0("archeofrag-dissimilarity-tanglegram-", input$spatial.variable, "-",  selected.clustering.method.name(), ".svg"),
+    content = function(file) {
+      clustering.stats.df <- clustering.stats.df()
+      idx <- clustering.stats.df[, 1] == names(clustering.method.names)[which(clustering.method.names == input$clustmethod)]
+      grDevices::svg(file,  width = 10)
+        dendextend::tanglegram(selected.tanglegrams()[[1]], selected.tanglegrams()[[2]],
+                               sort = TRUE,
+                               main = toupper(input$spatial.variable),
+                               margin_bottom = 11, margin_inner = 12,
+                               lab.cex = 1.4, cex_main = 1.6, cex_sub = 1,
+                               main_left = "Observed", main_right = "Expected",
+                               highlight_branches_lwd = FALSE, highlight_distinct_edges = FALSE)
+        mtext(paste0("\n\n\n",
+                     "Dissimilarity: 1 - admixture",
+                     "\n",
+                     "Clustering method: ", selected.clustering.method.name(),
+                     "\n",
+                     "Cophenetic correlation: ", clustering.stats.df[idx, ]$"Cophenetic correlation",
+                     "\n",
+                     "Entanglement value: ", clustering.stats.df[idx, ]$Entanglement,
+                     "\n",
+                     "Baker correlation: ", clustering.stats.df[idx, ]$"Baker's Gamma correlation"
+        ), side =  1)
       grDevices::dev.off()
     }
   )
   
-  output$admix.download.button <- renderUI({
-    downloadButton("admix.download", "Download as SVG")
+  output$tanglegram.download.button <- renderUI({
+    downloadButton("tanglegram.download", "Download as SVG")
   })
   
   # SIMULATION ####
@@ -730,7 +996,11 @@ server <- function(input, output, session) {
                                      varying = c("cohes.cohesion1", "cohes.cohesion2"),
                                      v.names = "cohesion", timevar="Layer")
     
-    hypotheses.df2$Layer <- factor(hypotheses.df2$Layer, labels = c("1", "2"))
+    units.pair <- names(graph.list())[as.numeric(input$units.pair)]
+    
+    hypotheses.df2$Layer <- factor(hypotheses.df2$Layer, 
+                                   labels = c(gsub("^(.*) /.*", "\\1", units.pair), gsub("^.*/ (.*)", "\\1", units.pair)))
+    
     hypotheses.df2$hypothesis <- factor(hypotheses.df2$hypothesis, levels = c("1", "2"),
                                         labels=c("Hypothesis 1", "Hypothesis 2"))
     
@@ -1045,7 +1315,7 @@ server <- function(input, output, session) {
     }
     
     DT::datatable(df,
-                  escape = F,  selection = 'none', filter = "none",
+                  escape = FALSE,  selection = 'none', filter = "none",
                   options = list(dom = 't', ordering = FALSE, paging = FALSE,
                                  preDrawCallback = DT::JS("function() {Shiny.unbindAll(this.api().table().node()); }"), 
                                  drawCallback = DT::JS("function() {Shiny.bindAll(this.api().table().node()); } ")
@@ -1063,54 +1333,68 @@ server <- function(input, output, session) {
     spatial.units <- spatial.units[spatial.units %in% input$optimisation.sp]
     
     if(length(spatial.units) == 2){
-      showNotification("There are only 2 spatial units. Nothing to merge.", duration = 10, type = "warning")
+      showNotification("There are only 2 spatial units. No possible merge.", duration = 10, type = "warning")
       return()
     } 
     
-    if(length(spatial.units) > 7){
-      showNotification("Select no more than 7 spatial units to combine.", duration = 10, type = "warning")
+    if(length(spatial.units) > 8){
+      showNotification("Select no more than 8 spatial units to combine.", duration = 10, type = "warning")
       return()
+    }
+    if(length(spatial.units) > 5){
+      showNotification("Computation has started... Please wait... It can take several minutes.", duration = 20, type ="message")
     } 
-    if(length(spatial.units) %in% c(6, 7)){
-      showNotification("Computation has started... Please wait...", duration = 20, type ="message")
-    } 
+    
+    pairs  <- .heap_permutation(spatial.units)
+    
+    # 1. list all combinations:
+    # eval(parse(text = paste0("pairs <- expand.grid(", paste0(rep("spatial.units, ", length(spatial.units)), collapse = ""),
+    #                           "stringsAsFactors = FALSE, KEEP.OUT.ATTRS = FALSE)")))
+    # pairs <- as.matrix(pairs)
+    # 
+    # # 2. keep only the combinations including all spatial.units
+    # items <- apply(pairs, 1, function(x)  length(unique(x)))  # this step is a little slow
+    # 
+    # items.nr <- length(spatial.units)
+    # pairs <- pairs[ items == items.nr, ]
 
-    # list all combinations:
-    eval(parse(text =  paste0("pairs <- expand.grid(", paste0(rep("spatial.units, ", length(spatial.units) - 1), collapse = ""),
-                              "spatial.units, stringsAsFactors = FALSE, KEEP.OUT.ATTRS = FALSE)")))
-    pairs <- as.matrix(pairs)
-    
-    # keep only the combinations including all spatial.units
-    items <- apply(pairs, 1, function(x)  length(unique(x)))  # this step is a little slow
-    items.nr <- length(spatial.units)
-    pairs <- pairs[ items == items.nr, ]
-    
     # filter duplicated, considering that within a pair the order of the spatial units does not matter:
     n.pairs <- floor(length(spatial.units) / 2)
     n.pairs <- matrix(seq_len(2 * n.pairs), ncol = 2, byrow = TRUE)
     
-    # for each pair of columns, replace by 
+    # for each pair of columns, create a tag combining the two labels
     for(row in seq_len(nrow(n.pairs))){
       pairs <- cbind(pairs, apply(pairs, 1, function(x, cols = c(n.pairs[row, ]))  paste0(sort(x[ cols ]), collapse = "")))
-      pairs <- pairs[duplicated(pairs[,  - c(n.pairs[row, ]) ]), ]
     }
+    pairs <- pairs[ ! duplicated(pairs[, seq(length(spatial.units) + 1, ncol(pairs))]), ] 
     
-    # clean
+    # clean, remove tags columns
     pairs <- pairs[, seq_len(length(spatial.units))]
     
-    # create a reference table with recoded spatial units
+    # 3.  create a reference table with recoded spatial units
     recoded.spatial.units <- pairs
     
     # merge some or all possible pairs of spatial units:
-    recoded.spatial.units <-  foreach::foreach(i = seq(0, c(nrow(n.pairs) -1)), .combine = "rbind", .errorhandling = "remove") %dopar%{
-      df <- recoded.spatial.units
-      for(row in seq_len(nrow(n.pairs) - i) ){
-        df[, n.pairs[row, ]] <- apply(df[, n.pairs[row, ]], 1, function(x) paste0(sort(unlist(x)), collapse = " + "))
+    if(input$parallelize){
+      recoded.spatial.units <- foreach::foreach(i = seq(0, nrow(n.pairs) -1), .combine = "rbind", .errorhandling = "remove") %dopar% {
+        df <- recoded.spatial.units
+        for(row in seq_len(nrow(n.pairs) - i) ){
+          df[, n.pairs[row, ]] <- apply(df[, n.pairs[row, ]], 1, function(x) paste0(sort(unlist(x)), collapse = " + "))
+        }
+        df
       }
-      df
+    } else {
+      recoded.spatial.units <- lapply(seq(0, nrow(n.pairs) -1), function(i){
+        df <- recoded.spatial.units
+        for(row in seq_len(nrow(n.pairs) - i) ){
+          df[, n.pairs[row, ]] <- apply(df[, n.pairs[row, ]], 1, function(x) paste0(sort(unlist(x)), collapse = " + "))
+        }
+        df
+      })
+      recoded.spatial.units <- do.call("rbind", recoded.spatial.units)
     }
     
-    # demultiply the reference table to get the same row numbers:
+    # duplicate the rows of reference table to get the same row numbers than the recoded table:
     eval(parse(text =  paste0("pairs <- rbind(", paste0(rep("pairs, ", nrow(n.pairs) - 1), collapse = ""), "pairs)")))
     
     # add a line for no merging at all:
@@ -1120,36 +1404,56 @@ server <- function(input, output, session) {
     # Function which, for each combination of spatial units 
     frag.get.cohesion.dispersion <- function(g, raw.spatial.units.row, recoded.spatial.units.row){
       # 1) recodes spatial units:
-      additional.sp.units <- unique(igraph::V(g)$spatial.variable) # determine non selected spatial units
+      additional.sp.units <- unique(igraph::V(g)$spatial.variable) # determine which are the non selected spatial units
       additional.sp.units <- additional.sp.units[ ! additional.sp.units %in% raw.spatial.units.row]
       
       igraph::V(g)$sp.u.aggregated <- as.character(factor(igraph::V(g)$spatial.variable,
                                               levels = c(raw.spatial.units.row, additional.sp.units),
                                               labels = c(recoded.spatial.units.row, additional.sp.units)))
       # 2) computes edges weights
-      g <- frag.edges.weighting(g, "sp.u.aggregated", verbose=FALSE)
+      g <- archeofrag::frag.edges.weighting(g, "sp.u.aggregated", verbose = FALSE)
       # 3) summarises the difference between cohesion values:
       cohesion.res <- NA
-      cohesion.res <- frag.layers.cohesion(graph = g, layer.attr = "sp.u.aggregated", verbose = FALSE)
-      cohesion.res <- apply(cohesion.res, 1, function(x)  sort.int(x)[2] - sort.int(x)[1] )
-      admix.res <- frag.layers.admixture(graph = g, layer.attr = "sp.u.aggregated", verbose = FALSE)
+      cohesion.res <- archeofrag::frag.layers.cohesion(graph = g, layer.attr = "sp.u.aggregated", verbose = FALSE)
+      cohesion.diff <- apply(cohesion.res, 1, function(x)  sort.int(x)[2] - sort.int(x)[1] )
+      admix.res <- apply(cohesion.res, 1, function(x) 1 - sum(x))
 
-      c("Cohesion difference median" = stats::median(cohesion.res, na.rm = TRUE),
-        "MAD" = stats::mad(cohesion.res, na.rm = TRUE),
-        "Admixture median"  = stats::median(admix.res, na.rm = TRUE),
-        "MAD." = stats::mad(admix.res, na.rm = TRUE))
+      c("cohesion.diff.median" = stats::median(cohesion.diff, na.rm = TRUE),
+        "cohesion.diff.mad" = stats::mad(cohesion.diff, na.rm = TRUE),
+        "admixture.median"  = stats::median(admix.res, na.rm = TRUE),
+        "admixture.mad" = stats::mad(admix.res, na.rm = TRUE),
+        "admixture.mean"  = mean(admix.res, na.rm = TRUE),
+        "admixture.sd" = stats::sd(admix.res, na.rm = TRUE)
+        )
     }
-    
     
     # ... run computation ----
-    # (Note that it is the slowest step of the workflow)
-    cohes.diff.res <- foreach::foreach(i = seq_len(nrow(pairs)), .combine = "rbind", .errorhandling = "pass") %dopar%{
-      frag.get.cohesion.dispersion(graph, raw.spatial.units.row = pairs[i, ],
-                                   recoded.spatial.units.row = recoded.spatial.units[i, ])
+    # (Note this the slowest step of the workflow (and it should be improved)
+    if(input$parallelize){
+      cohes.diff.res <- foreach::foreach(i = seq_len(nrow(pairs)), .combine = "rbind", .errorhandling = "pass") %dopar%{
+        frag.get.cohesion.dispersion(graph, 
+                                     raw.spatial.units.row = pairs[i, ],
+                                     recoded.spatial.units.row = recoded.spatial.units[i, ])
+      }
+    } else{
+      cohes.diff.res <- sapply(seq_len(nrow(pairs)), function(i){
+        frag.get.cohesion.dispersion(graph,
+                                     raw.spatial.units.row = pairs[i, ],
+                                     recoded.spatial.units.row = recoded.spatial.units[i, ])
+      })
+      cohes.diff.res <- t(cohes.diff.res)
     }
-    recoded.spatial.units <- apply(recoded.spatial.units, 1, function(x) {x[which(duplicated(x))] <- "" ; x}, simplify = F) # remove duplicated merged spatial units labels
+    # remove duplicated merged spatial units labels:
+    recoded.spatial.units <- apply(recoded.spatial.units, 1, function(x) {x[which(duplicated(x))] <- "" ; x}, simplify = FALSE) 
     recoded.spatial.units <- do.call("rbind", recoded.spatial.units)
     recoded.spatial.units <- data.frame(recoded.spatial.units)
+    
+    # tag observed result
+    recoded.spatial.units$type <- "merged"
+    recoded.spatial.units[1, ]$type <- "observed"
+    recoded.spatial.units[1, seq_len(length(spatial.units))] <- sapply(recoded.spatial.units[1, seq_len(length(spatial.units))], 
+                                                                       function(x) paste0("<i>", x, "</i>"))
+    
     recoded.spatial.units <- cbind(recoded.spatial.units, cohes.diff.res)
     
     # remove duplicates:
@@ -1161,25 +1465,22 @@ server <- function(input, output, session) {
     # sort the contents of the lines:
     idx <- seq_len(ncol(pairs))
     recoded.spatial.units[, idx] <- t(apply(recoded.spatial.units[, idx], 1,
-                   function(x) sort(unlist(x), na.last = T)))
+                   function(x) sort(unlist(x), na.last = TRUE)))
     
     # remove empty columns
     idx <- apply(recoded.spatial.units, 2, function(x) ! all(is.na(x)))
     recoded.spatial.units <- recoded.spatial.units[, idx ]
     
-    colnames(recoded.spatial.units) <- gsub("Var", "Sp. unit ", colnames(recoded.spatial.units))
-    rownames(recoded.spatial.units) <- NULL
-    # order the result by cohesion difference median value:
-    recoded.spatial.units$"Cohesion difference median" <- round(recoded.spatial.units$"Cohesion difference median", 3)
-    recoded.spatial.units$MAD <- round(recoded.spatial.units$MAD, 3)
-    recoded.spatial.units$"Admixture median" <- round(recoded.spatial.units$"Admixture median", 3)
-    recoded.spatial.units$MAD. <- round(recoded.spatial.units$MAD., 3)
+    idx <- seq(which(names(recoded.spatial.units) == "cohesion.diff.median"), ncol(recoded.spatial.units))
+    recoded.spatial.units[, idx] <- apply(recoded.spatial.units[, idx], 2, round, 3)
     
+    # order the result by cohesion difference median value:
+    idx <- order(recoded.spatial.units$"cohesion.diff.median",
+                 recoded.spatial.units$"admixture.median", recoded.spatial.units[, 1])
+    
+    # retrieve execution time:
     exec.time <- Sys.time() - start.time
     exec.time <- paste(round(as.numeric(exec.time), 0), units(exec.time))
-    
-    idx <- order(recoded.spatial.units$"Cohesion difference median",
-                 recoded.spatial.units$"Admixture median", recoded.spatial.units[,1])
     
     list(recoded.spatial.units[idx, ], exec.time)
     })  
@@ -1194,50 +1495,57 @@ server <- function(input, output, session) {
     sketch <-  paste0("<table class='display'>
   <thead>
     <tr>",
-       paste0(sapply(seq_len(ncol(tab) - 4),
+       paste0(sapply(seq_len(ncol(tab) - 6),
          function(x)  paste0('<th rowspan=2>Sp. unit ', x, '</th>' , collapse = "")), collapse = ""),
       "<th colspan=2>Cohesion differences</th>
-      <th colspan=2>Admixture values</th>
+      <th colspan=4>Admixture values</th>
     </tr>
     <tr>
       <th>Median</th>
       <th>MAD</th>
       <th>Median</th>
       <th>MAD</th>
+      <th>Mean</th>
+      <th>SD</th>
     </tr>
   </thead>
 </table>", collapse="")
     
-    DT::datatable(tab, rownames=F, container = sketch, escape=F, style = "default", selection = 'none',
-                  options = list(dom = 'tp'))
+    DT::datatable(tab, rownames = FALSE, container = sketch, escape = FALSE, style = "default", selection = 'none',
+                  options = list(dom = 'tp',
+                                 columnDefs = list(list(visible = FALSE, targets ="type")))
+                  )
     })
   
   
   
     output$optimisationText <- renderText({
-    req(optimisation.table, graph.selected)
-    graph <- graph.complete()
-    optim.results <- optimisation.table()
-    
-    if(is.null(optim.results[[1]])) return()
-    
-    cohesion.res <- frag.layers.cohesion(graph, layer.attr = "spatial.variable", verbose = FALSE)
-    cohesion.res <- apply(cohesion.res, 1, function(x)  sort.int(x)[2] - sort.int(x)[1] )
-    median.res <- round(stats::median(cohesion.res, na.rm = TRUE), 3)
-    
-    if(median.res <= min(optim.results[[1]]$"Cohesion difference median")){
-      comments.str <- "none of the merging solutions returned a lower value."
-    } else{
-      comments.str <- "some merging solutions returned lower values."
-    }
-    
-    paste0("<b>Computation results:</b> ", nrow(optim.results[[1]]),
-           " merging solutions evaluated in ", optim.results[[2]], " (using ", foreach::getDoParWorkers(), " parallel workers).<br>",
-          "<b>Median of the cohesion differences without merging:</b> ",
-          median.res, 
-          " +/- ", round(stats::mad(cohesion.res, na.rm = TRUE), 3), "<br>",
-          "<b>Comment:</b> ", comments.str
-          )
+      req(optimisation.table)
+      
+      optim.results <- optimisation.table()
+      
+      if(is.null(optim.results[[1]])) return()
+      
+      obs.cohes.diff.median <- optim.results[[1]][optim.results[[1]]$type == "observed", ]$cohesion.diff.median
+      obs.cohes.diff.mad <- optim.results[[1]][optim.results[[1]]$type == "observed", ]$cohesion.diff.mad
+     
+      min.cohes.diff.median <- min(optim.results[[1]][, ]$cohesion.diff.median)
+      obs.cohes.diff.median.position <- which(optim.results[[1]][, ]$cohesion.diff.median  %in% obs.cohes.diff.median)
+      
+      if(obs.cohes.diff.median == min.cohes.diff.median){
+        comments.str <- "No merging solution has a lower median value for cohesion differences."
+      } else{
+        comments.str <- paste(obs.cohes.diff.median.position - 1, "merging solutions returned lower median value for cohesion differences and must be examined.")
+      }
+      
+      nr.sp.units <- which(names(optim.results[[1]]) == "type") - 1
+      
+      paste0("<b>Computation results:</b> ", nrow(optim.results[[1]]),
+             " merging solutions  from ", nr.sp.units, " spatial units, computed in ", optim.results[[2]], "<br>",
+            "<b>Median of the cohesion differences without merging:</b> ",
+            obs.cohes.diff.median,  " +/- ", obs.cohes.diff.mad, "<br>",
+            "<b>Comment:</b> ", comments.str
+            )
   })
   
     
@@ -1251,7 +1559,7 @@ server <- function(input, output, session) {
       units.to.merge <- expand.grid(rownames(units.to.merge), colnames(units.to.merge))
       
       idx <- apply(units.to.merge, 1, function(su){
-        eval(parse(text = paste0("isTRUE(input$merge.", su[1], ".", su[2], ")" )))
+        eval(parse(text = paste0("isTRUE(input$'merge.", su[1], ".", su[2], "')" )))
       })
       
       units.to.merge <- units.to.merge[idx, ]
@@ -1422,7 +1730,7 @@ server <- function(input, output, session) {
   
   output$OM.objectsNumber.min.ui <- renderUI({
     numericInput("OM.objectsNumber.min", "minimum", min = 1, step = 1, 
-                 value = input.graph.params()$n.components)
+                 value = round(input.graph.params()$n.components / 2, 0))
   })
   
   output$OM.objectsNumber.max.ui <- renderUI({
@@ -1444,7 +1752,7 @@ server <- function(input, output, session) {
     sliderInput("OM.fragmentsCountOut.sens", 
                 paste0("Final fragments count (obs. value: ", input.graph.params()$vertices, ") +/- (%)"), 
                 width="100%",
-                value = 0, min = 0, max = 50, step = 1)
+                value = 15, min = 0, max = 50, step = 1)
   })
   
   output$OM.fragmentsBalance.val.ui <- renderUI({
@@ -1480,7 +1788,7 @@ server <- function(input, output, session) {
 
     sliderInput("OM.aggregFactor.val", 
                 paste0("Fragments aggregation (obs. value: ", input.graph.params()$aggreg.factor, ")"),
-                min = 0, max = 1, step = 0.01, value = c(0, 0))
+                min = 0, max = 1, step = 0.01, value = c(0, 1))
   })
   
   output$OM.asymmetric.selection <- renderUI({
@@ -1533,17 +1841,26 @@ server <- function(input, output, session) {
     finalFragCountMin <- input.graph.params()$vertices - final.frag.count.adjust
     finalFragCountMax <- input.graph.params()$vertices + final.frag.count.adjust
     
-    OM.finalFragmentsNumberMinOut.str <- paste0('  finalFragmentsNumberMin := ', finalFragCountMin, ',<br>') 
     
     OM.finalFragmentsNumberMaxOut.str <- ""
     OM.finalFragmentsNumberMax.map.str <- ""
     OM.finalFragmentsNumberMax.init.str <- ""
+    finalFragCountMin.comment <- ""
     
     if(finalFragCountMin != finalFragCountMax){
-      OM.finalFragmentsNumberMaxOut.str <- paste0('  finalFragmentsNumberMax := ', finalFragCountMax, ',<br>') 
+      finalFragCountMin.comment <- paste0("  // i.e. observed value -",  input$OM.fragmentsCountOut.sens , "%")
+      finalFragCountMax.comment <- paste0("  // i.e. observed value +",  input$OM.fragmentsCountOut.sens , "%")
+      
+      OM.finalFragmentsNumberMaxOut.str <- paste0('  finalFragmentsNumberMax := ', finalFragCountMax, ',',
+                                                  finalFragCountMax.comment,
+                                                  '<br>') 
       OM.finalFragmentsNumberMax.map.str <- '  inputs += finalFragmentsNumberMax.mapped,<br>'
       OM.finalFragmentsNumberMax.init.str <- 'val finalFragmentsNumberMax = Val[Int]<br>'
     }
+    
+    OM.finalFragmentsNumberMinOut.str <- paste0('  finalFragmentsNumberMin := ', finalFragCountMin, ',',
+                                                finalFragCountMin.comment,
+                                                '<br>') 
     
     # preserve object number
     preserveObjectsNumber.str <- unlist(strsplit(input$OM.preserveObjectsNumber.val, split = ", "))
@@ -1585,7 +1902,7 @@ server <- function(input, output, session) {
     # .init.str: variable declaration
     # .map.str: OM variable mapping
     # .R.str: R code
-    # .obj.str: opoen mole code to declare the variable as an objective
+    # .obj.str: open mole code to declare the variable as an objective
     OM.relationCountOut.obj.str  <- ""
     OM.objectCountOut.obj.str  <- ""
     OM.disturbanceOut.obj.str  <- ""
@@ -1609,6 +1926,8 @@ server <- function(input, output, session) {
     OM.cohesion1Out.map.str  <- ""
     OM.cohesion2Out.map.str  <- ""
     OM.admixtureOut.map.str  <- ""
+    OM.finalFragmentCountOut.map.str <- ""
+    OM.isPlanarOut.map.str <- ""
     
     OM.relationCountOut.R.init.str  <- ""
     OM.objectCountOut.R.init.str  <- ""
@@ -1621,6 +1940,8 @@ server <- function(input, output, session) {
     OM.cohesion1Out.R.init.str  <- ""
     OM.cohesion2Out.R.init.str  <- ""
     OM.admixtureOut.R.init.str  <- ""
+    OM.finalFragmentCountOut.R.init.str <- ""
+    OM.isPlanarOut.R.init.str <- ""
     
     OM.relationCountOut.R.str  <- ""
     OM.objectCountOut.R.str  <- ""
@@ -1633,6 +1954,8 @@ server <- function(input, output, session) {
     OM.cohesion1Out.R.str  <- ""
     OM.cohesion2Out.R.str  <- ""
     OM.admixtureOut.R.str  <- ""
+    OM.finalFragmentCountOut.R.str <- ""
+    OM.isPlanarOut.R.str <- ""
     
     OM.relationCountOut.init.str <- ""
     OM.objectCountOut.init.str <- ""
@@ -1644,6 +1967,8 @@ server <- function(input, output, session) {
     OM.cohesion1Out.init.str <- ""
     OM.cohesion2Out.init.str <- ""
     OM.admixtureOut.init.str <- ""
+    OM.finalFragmentCountOut.init.str <- ""
+    OM.isPlanarOut.init.str <- ""
     
     obs.admix <-  round(archeofrag::frag.layers.admixture(graph.selected(), "spatial.variable", verbose = FALSE), 2)
     obs.cohesion <- round(archeofrag::frag.layers.cohesion(graph.selected(), "spatial.variable", verbose = FALSE), 2)
@@ -1663,17 +1988,25 @@ server <- function(input, output, session) {
     }
    
     if(input$OM.objectCountOut){
+      
       OM.objectCountOut.init.str <- 'val objectCountOut = Val[Int]<br>' 
       OM.objectCountOut.map.str  <- '  outputs += objectCountOut.mapped,<br>'
       OM.objectCountOut.R.init.str <- '            objectCountOut   <- -1<br>'
       OM.objectCountOut.R.str <- '                objectCountOut   <- frag.params$n.components<br>'
       
       OM.objectCountOut.sens <- 0.1
+      OM.objectCountOut.comment <- ""
+      
       if(input$OM.objectCountOut.sens != 0){
         OM.objectCountOut.sens <- round(input.graph.params()$n.components * input$OM.objectCountOut.sens / 100, 0)
+        OM.objectCountOut.comment <- paste0("  // i.e. observed value +/-",  input$OM.objectCountOut.sens , "%")
       }
+      
+      
       OM.objectCountOut.obj.str <- paste0("    objectCountOut evaluate \"objectCountOut.map(x => math.abs(x - ",
-                                          input.graph.params()$n.components, ")).max\" under ", OM.objectCountOut.sens, ",<br>")
+                                          input.graph.params()$n.components, ")).max\" under ", OM.objectCountOut.sens, ",",
+                                          OM.objectCountOut.comment,
+                                          "<br>")
     }
     
     if(input$OM.disturbanceOut){
@@ -1731,47 +2064,68 @@ server <- function(input, output, session) {
     
     if(input$OM.cohesion1Out) {
       
-      OM.cohesion1Out.sens <- 0.001
+      OM.cohesion1Out.sens <- 0.0049
       if(input$OM.cohesion1Out.sens != 0){OM.cohesion1Out.sens <- input$OM.cohesion1Out.sens}
       
       OM.cohesion1Out.init.str <- 'val cohesion1Out = Val[Double]<br>' 
       OM.cohesion1Out.map.str  <- '  outputs += cohesion1Out.mapped,<br>'
       OM.cohesion1Out.R.init.str <- '            cohesion1Out     <- -1.0<br>'
       OM.cohesion1Out.R.str <- '                cohesion1Out     <- cohesion.results[1]<br>'
-      OM.cohesion1Out.obj.str <- paste0("    cohesion1Out evaluate \"cohesion1Out.map(x => math.abs(x - ",
+      OM.cohesion1Out.obj.str <- paste0("    cohesion1Out   evaluate \"cohesion1Out.map(x => math.abs(x - ",
                                         obs.cohesion[1], ")).max\" under ", OM.cohesion1Out.sens, ",<br>")
     }
     
     if(input$OM.cohesion2Out){
       
-      OM.cohesion2Out.sens <- 0.001
+      OM.cohesion2Out.sens <- 0.0049
       if(input$OM.cohesion2Out.sens != 0){OM.cohesion2Out.sens <- input$OM.cohesion2Out.sens}
       
       OM.cohesion2Out.init.str <- 'val cohesion2Out = Val[Double]<br>' 
       OM.cohesion2Out.map.str  <- '  outputs += cohesion2Out.mapped,<br>'
       OM.cohesion2Out.R.init.str <- '            cohesion2Out     <- -1.0<br>'
       OM.cohesion2Out.R.str <- '                cohesion2Out     <- cohesion.results[2]<br>'
-      OM.cohesion2Out.obj.str <- paste0("    cohesion2Out evaluate \"cohesion2Out.map(x => math.abs(x - ",
+      OM.cohesion2Out.obj.str <- paste0("    cohesion2Out   evaluate \"cohesion2Out.map(x => math.abs(x - ",
                                         obs.cohesion[2], ")).max\" under ",  OM.cohesion2Out.sens, ",<br>")
     }
     
     if(input$OM.admixtureOut){
       
-      OM.admixtureOut.sens <- 0.001
+      OM.admixtureOut.sens <- 0.0049
       if(input$OM.admixtureOut.sens != 0){OM.admixtureOut.sens <- input$OM.admixtureOut.sens}
       
       OM.admixtureOut.init.str <- 'val admixtureOut = Val[Double]<br>'
       OM.admixtureOut.map.str  <- '  outputs += admixtureOut.mapped,<br>'
       OM.admixtureOut.R.init.str <- '            admixtureOut     <- -1.0<br>'
+      
       OM.admixtureOut.R.str <- '                admixtureOut     <- frag.layers.admixture(g, \'layer\')<br>'
-      OM.admixtureOut.obj.str <- paste0("    admixtureOut evaluate \"admixtureOut.map(x => math.abs(x - ",
+      if(input$OM.cohesion1Out | input$OM.cohesion2Out){
+        OM.admixtureOut.R.str <- '                admixtureOut     <- 1 - sum(cohesion.results)<br>'
+      }
+      
+      OM.admixtureOut.obj.str <- paste0("    admixtureOut   evaluate \"admixtureOut.map(x => math.abs(x - ",
                                         obs.admix, ")).max\" under ", OM.admixtureOut.sens, ",<br>")
     }
+
+    if(input$OM.fragmentsCountOut.sens > 0){
+      OM.finalFragmentCountOut.init.str <-   'val finalFragmentCountOut = Val[Int]<br>' 
+      OM.finalFragmentCountOut.map.str  <-   '  outputs += finalFragmentCountOut.mapped,<br>'
+      OM.finalFragmentCountOut.R.init.str <- '            finalFragmentCountOut <- -1.0<br>'
+      OM.finalFragmentCountOut.R.str <-      '                finalFragmentCountOut <- frag.params$vertices <br>'
+    }
+    
+    
+    if((length(planarGraphOnly.str) > 1)){
+      OM.isPlanarOut.init.str <-   'val isPlanarOut = Val[Boolean]<br>' 
+      OM.isPlanarOut.map.str  <-   '  outputs += isPlanarOut.mapped,<br>'
+      OM.isPlanarOut.R.init.str <- '            isPlanarOut      <- -1.0<br>'
+      OM.isPlanarOut.R.str <-      '                isPlanarOut      <- frag.params$planar <br>'
+    }
+    
 
     
     get.param.str <- ""
     if(input$OM.relationCountOut | input$OM.objectCountOut | input$OM.disturbanceOut | input$OM.objectsBalanceOut | input$OM.fragBalanceOut | input$OM.aggregFactorOut){
-      get.param.str <- '                frag.params <- frag.get.parameters(g, \'layer\')<br>'
+      get.param.str <- '                frag.params      <- frag.get.parameters(g, \'layer\')<br>'
     }
     
     # Default initialisation values for ranges: by default, the value read on the studied graph. However, if the values selected by the user are equal, replace the default value by this selected value
@@ -1790,7 +2144,7 @@ server <- function(input, output, session) {
       disturbance.default <-   input$OM.disturbance.val[1]
     }
     
-    aggregFactor.default <- input.graph.params()$aggreg.factor 
+    aggregFactor.default <- 0 # input.graph.params()$aggreg.factor 
     if(input$OM.aggregFactor.val[1] == input$OM.aggregFactor.val[2]){
       aggregFactor.default <-  input$OM.aggregFactor.val[1]
     }
@@ -1857,9 +2211,10 @@ server <- function(input, output, session) {
            'val preserveObjectsNumber = Val[Boolean]<br>',
            'val preserveFragmentsBalance = Val[Boolean]<br>',
            'val preserveInterUnitsConnection = Val[Boolean]<br>',
-           'val mySeed = Val[Int]<br>',
+           'val seed = Val[Int]<br>',
            '<br>',
            '// Output values<br>',
+           'val seedOut = Val[Int]<br>',
            OM.cohesion1Out.init.str,
            OM.cohesion2Out.init.str,
            OM.admixtureOut.init.str,
@@ -1869,11 +2224,13 @@ server <- function(input, output, session) {
            OM.fragBalanceOut.init.str,
            OM.disturbanceOut.init.str,
            OM.aggregFactorOut.init.str,
+           OM.finalFragmentCountOut.init.str,
+           OM.isPlanarOut.init.str,
            '<br>',
            'val local = LocalEnvironment(', input$OM.parallelize, ')  // Number of cores to use. Adjust as needed<br>',
            '<br>',
            'val archeofrag =  RTask(<br>',
-           '  containerSystem = SingularityFlatImage(), // optionnal <br>',
+           '//  containerSystem = SingularityFlatImage(), // optionnal <br>',
            '  script = """<br>',
            '            library(archeofrag)<br>',
            '            # Declare default values:<br>',
@@ -1886,6 +2243,11 @@ server <- function(input, output, session) {
            OM.disturbanceOut.R.init.str,
            OM.fragBalanceOut.R.init.str,
            OM.aggregFactorOut.R.init.str,
+           OM.finalFragmentCountOut.R.init.str,
+           OM.isPlanarOut.R.init.str,
+           '<br>',
+           '            set.seed(seed)<br>',
+           '            seedOut <- seed<br>',
            '            try({<br>',
            '                # Generate fragmentation graph:<br>',
            '                g <- frag.simul.process(initial.layers = layerNumber,<br>',
@@ -1916,15 +2278,17 @@ server <- function(input, output, session) {
            OM.disturbanceOut.R.str,
            OM.fragBalanceOut.R.str,
            OM.aggregFactorOut.R.str,
+           OM.finalFragmentCountOut.R.str,
+           OM.isPlanarOut.R.str,
            '            }, silent = FALSE)<br>',
            '            """,<br>',
            '  install = Seq(<br>',
            '    """R --slave -e \'install.packages("BiocManager") ; library("BiocManager") ; BiocManager::install("RBGL")\' """,<br>',
-           '    """R --slave -e \'install.packages("remotes", dependencies = T)\' """,<br>',
-           '    """R --slave -e \'library(remotes); remotes::install_github("sebastien-plutniak/archeofrag", force=TRUE)\' """<br>',
+           '    """R --slave -e \'install.packages("remotes", dependencies = TRUE)\' """,<br>',
+           '    """R --slave -e \'library(remotes); remotes::install_github("sebastien-plutniak/archeofrag", force = TRUE)\' """<br>',
            '  )<br>',
            ') set (<br>',
-           '  inputs += mySeed.mapped,<br>',
+           '  inputs += seed.mapped,<br>',
            '  inputs += objectsNumber.mapped,<br>',
            '  inputs += fragmentsNumber.mapped,<br>',
            '  inputs += finalFragmentsNumberMin.mapped,<br>',
@@ -1939,33 +2303,35 @@ server <- function(input, output, session) {
            '  inputs += aggregation.mapped,<br>',
            '  inputs += planarGraphsOnly.mapped,<br>',
            '  inputs += asymmetricTransport.mapped,<br>',
+           '  outputs += seedOut.mapped,<br>',
            OM.cohesion1Out.map.str,
            OM.cohesion2Out.map.str,
            OM.admixtureOut.map.str,
            OM.relationCountOut.map.str,
-           # OM.fragmentCountOut.map.str,
            OM.objectCountOut.map.str,
            OM.objectsBalanceOut.map.str,
            OM.disturbanceOut.map.str,
            OM.fragBalanceOut.map.str,
            OM.aggregFactorOut.map.str,
-           # OM.weightsumOut.map.str,
-           '  // Default values, taken from the studied graph:<br>',
-           '  mySeed := 1,<br>',
+           OM.finalFragmentCountOut.map.str,
+           OM.isPlanarOut.map.str,
+           '<br>  // Default settings:<br>',
+           '  seed := 1,<br>',
            '  layerNumber := 1,<br>',
+           '  preserveObjectsNumber := ', preserveObjectsNumber.str[1], ',<br>',
+           '  preserveFragmentsBalance := ', preserveFragmentsBalance.str[1], ',<br>',
+           '  preserveInterUnitsConnection := ', preserveInterUnitsConnection.str[1], ',<br>',
+           '  asymmetricTransport := ', asymmetric.str[1], ',<br>',
+           '<br>  // Default values, based on the studied graph:<br>',
            '  objectsNumber := ', input.graph.params()$n.components, ',<br>',
            '  fragmentsNumber := ', input.graph.params()$vertices, ',<br>', 
            OM.finalFragmentsNumberMinOut.str, 
            OM.finalFragmentsNumberMaxOut.str, 
-           '  preserveObjectsNumber := ', preserveObjectsNumber.str[1], ',<br>',
-           '  preserveFragmentsBalance := ', preserveFragmentsBalance.str[1], ',<br>',
-           '  preserveInterUnitsConnection := ', preserveInterUnitsConnection.str[1], ',<br>',
-           '  aggregation := ', aggregFactor.default, ',<br>', 
            '  objectsBalance := ', objectsBalance.default, ',<br>', 
            '  fragmentsBalance := ', fragmentsBalance.default, ',<br>', 
            '  disturbance := ', disturbance.default, ',<br>', 
-           '  planarGraphsOnly := ', planarGraphOnly.str[1], ',<br>',
-           '  asymmetricTransport := ', asymmetric.str[1], '<br>',
+           '  aggregation := ', aggregFactor.default, ',<br>', 
+           '  planarGraphsOnly := ', planarGraphOnly.str[1], '<br>',
            ')<br>',
            '<br>',
            '<br>',
@@ -1998,9 +2364,8 @@ server <- function(input, output, session) {
            OM.aggregFactorOut.obj.str,
            OM.objectsBalanceOut.obj.str,
            OM.fragBalanceOut.obj.str,
-           # OM.weightsumOut.str,
            '  ),<br>',
-           '  stochastic = Stochastic(seed = mySeed)<br>',
+           '  stochastic = Stochastic(seed = seed)<br>',
            ') ', OM.islands.str,
            'hook (workDirectory / "hdose-results", frequency = 100) on local // adjust execution machine',
            "</pre>")

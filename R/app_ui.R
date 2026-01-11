@@ -24,6 +24,7 @@ $(function () {
 })
 "
 
+
 paste.js <- "
 Shiny.addCustomMessageHandler('txt', function (txt) {
     navigator.clipboard.writeText(txt);
@@ -38,12 +39,14 @@ ui <- shinyUI(fluidPage(  # UI ----
                             tags$script(HTML(js)),
                             tags$script(HTML(paste.js))
                           ),
-                          sidebarLayout(
+                          sidebarLayout( # side bar ----
                             sidebarPanel(
                               h3(div(HTML("<a href=https://github.com/sebastien-plutniak/archeofrag.gui title='Go to the archeofrag.gui page' target=_blank>archeofrag.gui</a> v",
                                           as.character(utils::packageVersion("archeofrag.gui"))
                                           ))),
                               div(HTML("using <a href=https://github.com/sebastien-plutniak/archeofrag title='Go to the archeofrag page' target=_blank>archeofrag</a> v",  as.character(utils::packageVersion("archeofrag")) )),
+                              h3("Computation"),
+                              uiOutput("parallelize.box"),
                               h3("Input data"),
                               uiOutput("dataset.selector"),
                               fileInput('inputEdges', 'Relationships (CSV file):',
@@ -55,7 +58,10 @@ ui <- shinyUI(fluidPage(  # UI ----
                               radioButtons(inputId = 'sep', label = 'Separator:', 
                                            choices = c("," =',' , ";"=';'
                                                        ,"tab"='\t'), inline=T, selected = ','),
+                              
                               h3("Variable selection"),
+                              uiOutput("subset.selector"),
+                              uiOutput("subset.options"),
                               uiOutput("variable.selector"),
                               uiOutput("layers.selector"),
                               width=2), # end sidebarpanel
@@ -95,10 +101,11 @@ ui <- shinyUI(fluidPage(  # UI ----
                      <ul>
                       <li>the <b>spatial variable</b>  to consider (i.e. the spatial unit containing the fragments),
                       <li>the <b>pair of spatial units</b> to consider: this selection determines the plot generated in the 'Visualisation' tab and the simulation presets in the 'Simulation' tab.</li>
+                      <li>Optionally, a variable can be used to subset the dataset and specify certain values.</li>
                     </ul>
                   </p>
                 <h3>Measurements</h3>
-                <p>In this tab, statistics are reported for all pairs of spatial units for the selected 'Spatial variable': number of fragments and refitting relationships, etc. The <b>cohesion</b> and <b>admixture</b> values are calculated using the TSAR method. Tables and figures facilitate the exploration of the results.</p>
+                <p>In this tab, statistics are reported for all pairs of spatial units for the selected 'Spatial variable': number of fragments and refitting relationships, etc. The <b>cohesion</b> and <b>admixture</b> values are calculated using the TSAR method. Tables and figures facilitate the exploration of the results. Using admixture values helps  detecting anomaly in the spatial distribution of refitting connection.</p>
                 <h3>Spatial units optimisation</h3>
                 <p> The spatial units defined in the input dataset might need critical revision. This tab allows
                 <ul>
@@ -139,14 +146,14 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                    column(10, align="center",
                                                    HTML(
                                                   "<div style=width:40%;, align=left>
-                                                   <p>Use the <b>morphometry</b> variable to include any sort of morpho-metrical information about the objects in the computation (e.g. length, surface, volume, weight). Use at least two <b>coordinates</b> to include physical distances between the object found places in the computation (whatever the unit: metre, centimetre, inch, etc.). Details about the method are given in  <a href=https://doi.org/10.4324/9781003350026-1 target=_blank>Plutniak <i>et al.</i> 2023</a>.</p>
+                                                   <p>Use the <b>morphometry</b> variable to include any sort of morpho-metrical information about the objects in the computation (e.g. length, surface, volume, weight). Use at least two <b>coordinates</b> to include physical distances between the object found places in the computation (whatever the unit: metre, centimetre, inch, etc.). See   <a href=https://doi.org/10.4324/9781003350026-1 target=_blank>Plutniak <i>et al.</i> 2023</a> for details.</p>
                                                    <p>Note that these weighting options are <b>not</b> supported by the simulation function, which computes cohesion values from the topology of the connection relationships only.</p>
                                                   </div>"
                                                    ), #end HTML
                                                    ) #end columns
                                                    ), # end fluidrow
                                                    fluidRow(
-                                                   h1("Stats by pair of spatial units"),
+                                                   h1("Statistics by pair of spatial units"),
                                                    column(12, align="center",
                                                    DT::DTOutput("resultsTab",  width="90%"), 
                                                    ), # end column
@@ -159,24 +166,97 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                           <li><b>Cohesion diff.(erence)</b>: for a pair of spatial units, highest cohesion value - lowest cohesion value. (See the 'Spatial units optimisation' tab for details.) </li>
                                                         </ul>
                                                         "),
-                                                   ) # end column
+                                                   ), # end column
+                                                   column(10, align="center",
+                                                          downloadButton("download.measurements.tab", "Download table"),
+                                                          ) #end column
                                                    ), #end fluirow
-                                                   h1("Dissimilarity between spatial units"), # .. dissimilarity ----
+                                                  fluidRow(
+                                                  h1("Ranking of spatial units by cohesion"), # .. ranking ----
+                                                  column(10, align="center",
+                                                         HTML("<div  style=width:40%;, align=left> 
+                                                              Considering the series of spatial units pairs, the units are ranked based on the number of pairs where they have the higher cohesion value. Higher count suggest relatively better defined and reliable units in the series:
+                                                              </div>"),
+                                                         br(),
+                                                         tableOutput("unit.ranks")
+                                                   ), #end column
+                                                   ), #end fluirow
+                                                   fluidRow(
+                                                   h1("Anomaly detection in the spatial unit series"), # .. dissimilarity ----
                                                    column(10, align="center",
                                                    HTML("<div  style=width:40%;, align=left> 
-                                                   <p>The dissimilarity between spatial units A and B is calculated as 1 - admixture(A, B). Results can be normalised (feature scaling) by ticking the box.</p>
-                                                   <p>The higher the dissimilarity value, the more likely it is that these two archaeological units correspond to different depositional units. Theoretically, a spatial unit is expected to be more similar to those near it. </p>
-                                                   <p>In the case of stratigraphic layers, a layer is expected to be more related to the layers directly above and below it. The dendrogram's branches are ordered alphanumerically according to their label (following the stratigraphic order of the layers). Anomalies are revealed when, despite this ordering constraint, the expected order of superposition is not observed in the result (see <a href=https://doi.org/10.4324/9781003350026-1 target=_blank>Plutniak <i>et al.</i> 2023</a>).
+                                                   <h2>Method</h2>
+                                                   <p> Let us assume that:
+                                                   <ul>
+                                                    <li>A spatial unit is expected to be more related to those near it  (i.e. having higher admixture values). In the case of stratigraphic layers, for example, a layer is expected to have more refitting connection with the layers located directly above and below it.</li>
+                                                    <li>The alphanumerical labels of the spatial units in the dataset reflect their relative location (e.g. the labels follow the stratigraphic order).</li>
+                                                    </ul>
+                                                   Then, admixture can be used to study a series of related spatial units and detect anomaly in the spatial distribution of refitting connection.
+                                                   </p>
+                                                   <p>
+                                                   Dissimilarity between two spatial units A and B is calculated as <i>1 - admixture(A, B)</i>. The higher the dissimilarity value, the more likely it is that these two archaeological units correspond to different depositional events.
+                                                    Computing a hierarchical clustering on this dissimilarity matrix and constraining the resulting dendrogram's branches to be ordered alphanumerically should reveal anomalies when, despite this ordering constraint, the expected proximity relationships are not observed in the results (see <a href=https://doi.org/10.4324/9781003350026-1 target=_blank>Plutniak <i>et al.</i> 2023</a>).
                                                   </p>
+                                                  <h2>Instructions</h2>
+                                                  <p>
+                                                    <ul>
+                                                      <li>Observe the dissimilarity matrix below.</li>
+                                                      <li>Optionally, tick the box to <b>normalize</b> the values (by <a href=https://en.wikipedia.org/wiki/Feature_scaling target=_blank>feature scaling</a>).</li>
+                                                      <li>Select a <a href=https://en.wikipedia.org/wiki/Hierarchical_clustering#Common_Linkage_Criteria target=_blank>clustering method</a>:
+                                                        <ul>
+                                                          <li>UPGMA, average linkage (Unweighted Pair Group Method with Arithmetic Mean)</li>
+                                                          <li>WPGMA, weighted average linkage</li>
+                                                          <li>Single linkage </li>
+                                                          <li>Complete linkage </li>
+                                                          <li>Ward, using Ward's clustering <a href=https://doi.org/10.1007/s00357-014-9161-z target=_blank>criterion</a>.</li>
+                                                        </ul>
+                                                      </li>
+                                                      <li> The resulting <a href=https://cran.r-project.org/web/packages/dendextend/vignettes/dendextend.html#tanglegram target=_blank>tanglegram</a> includes:
+                                                        <ul>
+                                                          <li>on the left, the clustering result obtained from <b>observed</b> refitting data,</li> 
+                                                          <li>on the right, the clustering result obtained from the <b>expected</b> ordering of the spatial units (assuming no perturbation and an equal number of refits for all spatial units),</li>
+                                                          <li> in the middle of the figure, the lines connect the location of the spatial units in the two clustering results, highlighting differences.</li>
+                                                      </ul>
+                                                          The difference between these results is evaluated using
+                                                        <ul>
+                                                         <li>
+                                                        "),
+                                                               span(`data-toggle` = "tooltip", `data-placement` = "left", title = " The cophenetic distance between two observations that have been clustered is defined to be the intergroup dissimilarity at which the two observations are first combined into a single cluster. A dendrogram is an appropriate summary of some data if the correlation between the original distances and the cophenetic distances is high. Click for more information.",
+                                                          HTML("<a href=https://en.wikipedia.org/wiki/Cophenetic_correlation target=_blank>Cophenetic correlation</a>")
+                                                               ), #end span
+                                                          HTML(": a quality measure for the dendrogram about observed refitting data (correlation between the observed dissimilarity and the dendrogram cophenetic distances). Values range between -1 to 1, with near 0 values meaning low quality.</li>
+                                                          <li>"),
+                                                   span(`data-toggle` = "tooltip", `data-placement` = "left", title = "Entanglement measures how well the labels of two dendrograms are aligned, from 0 (fully aligned labels) to 1 (fully mismatched labels). It is computed by numbering the labels (1 to the total number of labels) of each dendrogram, and then computing the L-norm distance between these two vectors. Click for more information.",
+                                                          HTML("<a href=https://cran.r-project.org/web/packages/dendextend/vignettes/dendextend.html#tanglegram target=_blank>Entanglement</a>")
+                                                        ),#end span 
+                                                          HTML(": Values range between 1 (full entanglement) and 0 (no entanglement).</li>
+                                                          <li>"),
+                                                               span(`data-toggle` = "tooltip", `data-placement` = "left", title = " Baker's Gamma index is defined as the rank correlation between the stages at which pairs of objects combine in each of the two trees.",
+                                                                    HTML("<a href=https://search.r-project.org/CRAN/refmans/dendextend/html/cor_bakers_gamma.html target=_blank>Baker's Gamma</a>")
+                                                               ), #end span
+                                                               HTML(": a measure of similarity between the expected and the observed dendrograms. Values range between -1 to 1, with near 0 values meaning that the two dendrograms. are not statistically similar. 
+                                                          </li>
+                                                          </ul>
+                                                          </li>
+                                                    </ul>
+                                                  </p>
+                                                  <h2>Results</h2>
                                                   </div> "),
-                                                   checkboxInput("normalise.diss", "Normalise", value = F),
-                                                   tableOutput("admixTab"),
-                                                   selectInput("clustmethod", "Clustering method", 
-                                                               choices = c(UPGMA = "average", WPGMA = "mcquitty","Single linkage" = "single", "Complete linkage" = "complete",  Ward = "ward.D2")),
-                                                   imageOutput("admix.plot",  width= "70%"),
-                                                   uiOutput("admix.download.button"),
+                                                   h3("Dissimilarity matrix"),
+                                                   checkboxInput("normalise.diss", "Normalise", value = FALSE),
+                                                   tableOutput("dissimilarityTab"),
+                                                   downloadButton("download.dissimilarityTab", "Download table"),
+                                                   h3("Clustering"),
+                                                   DT::DTOutput("clustering.stats"), 
+                                                   br(),
+                                                   uiOutput("admix.clustering.selector"),
+                                                   br(),
+                                                   imageOutput("tanglegram.plot",  width= "100%", height = "600px"),
+                                                   br(),
+                                                   uiOutput("tanglegram.download.button"),
                                                    br(), br()
                                                    ) # end column
+                                                   ) #end fluidrow
                                           ), #end tabPanel
                                           tabPanel("Visualisation", # VISUALISATION ----
                                                    fluidRow(
@@ -207,9 +287,9 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                                  It 1) determines the series of possible spatial units merging, 2) generates the corresponding fragmentation graphs, 3) computes the cohesion value of each unit for all possible pairs of spatial units (as in the 'Measurements' tab), 4) summarises these values by measuring their median and <a href=https://en.wikipedia.org/wiki/Median_absolute_deviation target=_blank>median absolute deviation</a>.</p>
                                                                  <h2>Instructions</h2>
                                                                    <ul>
-                                                                      <li>Select the spatial units to consider for  possible merging. Due to combinatorial explosion, the maximum number of units is <b>limited to 7</b> (in this case, and depending on the graph size, the computation might be slow). Note that the merging of spatial units is evaluated regardless of their relative position (adjacent or not) in the archaeological space.</li>
+                                                                      <li>Select the spatial units to consider for possible merging. The maximum number of units is <b>limited to 8</b> (for more than 6 units, and depending on  graph size and the available computational power, the computation might take several minutes). Note that the merging of all selected spatial units are considered, regardless of their relative position (adjacent or not) in the archaeological space.</li>
                                                                       <li>  In the <b>Results</b> section, merged spatial units are indicated by the <b>'+' symbol</b>. Results are decreasingly ordered according to the median value of the differences between cohesion values: the lower the median, the more balanced the archaeological information about the series of spatial units. In addition, the median of the admixture values is also reported: the higher the value, the more mixed the spatial units. Use the dynamic table to explore the combinations and find out which optimal merging solution fits best with archaeological interpretation.</li>
-                                                                  <li> In the <b>Merge units</b> section, the dataset can be edited to actually merge the selected spatial units. The resulting spatial units are then available from all <i>archeofrag.gui</i>'s functions. By reducing the number of spatial units, this feature is a way around the aforementioned limit to 7 spatial units. </li>
+                                                                  <li> In the <b>Merge units</b> section, the dataset can be edited to actually merge the selected spatial units. The resulting spatial units are then available from all <i>archeofrag.gui</i>'s functions. Reducing the number of spatial units is a way around to the 8 spatial units limit. </li>
                                                                    </ul>
                                                                  </p>
                                                                  
@@ -219,7 +299,7 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                      column(10, align="left",
                                                             br(), br(), 
                                                             uiOutput("optimisation.sp.ui"),
-                                                            HTML("Select up to 7 spatial units and launch the computation:"),
+                                                            HTML("Select up to 8 spatial units and run the computation:"),
                                                             br(), br(),  
                                                             actionButton("optimisationButton", "Run computation"), 
                                                             br(),  
@@ -236,6 +316,7 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                           <li><b>Sp. unit</b>: spatial units. Merged spatial  units are associated with a '+' symbol.</li>                               
                                                           <li><b>Cohesion difference</b>: for a pair of spatial units, highest cohesion value - lowest cohesion value.</li>
                                                           <li><b>MAD</b>: <a href=https://en.wikipedia.org/wiki/Median_absolute_deviation target=_blank>median absolute deviation</a>.</li>
+                                                          <li><b>SD</b>: standard deviation.</li>
                                                         </ul>
                                                         "),
                                                      ) #end column
@@ -353,19 +434,19 @@ ui <- shinyUI(fluidPage(  # UI ----
                    "<div style=width:40%;, align=left>
                     <h2>Presentation</h2>
                     <p>
-                      This tool enables simulating the formation process of two spatial units. Its advantages method includes:
+                      This tool enables simulating the formation process of two spatial units. Its advantages includes:
                       <ul>
                         <li>Robustness: the parameters are based on observed evidence, no assumptions are required.</li>
                         <li>Fast computation: it can be run on a personal computer.</li>
                       </ul>
-                      However, it simulates what might have happen during a period of time from an undetermined moment in the 'alteration phase' to the excavation event (it does not cover not the assemblage's entire timespan from the deposition event to the excavation event). 
+                      However, it simulates what might have happen during the period of time spaning from a moment (undetermined) in the 'alteration phase' to the excavation event. (In other words, it does not cover not the assemblage's entire timespan from the deposition event to the excavation event.)
                     </p>
                     <h2>Instructions</h2>
                     <p>
                       <ul>
                       <li>Select the pair of spatial units to compare in the sidebar menu.</li>
                       <li>The parameters of the simulation are automatically filled with the values measured on the graph corresponding to the two spatial units chosen (number of objects, fragments balance, <a href=https://en.wikipedia.org/wiki/Planar_graph target=_blank>planarity</a>, etc.). However, those parameters can be edited to test other hypotheses. The final number of refitting relationships is not constrained.</li>
-                      <li>Optionally, set an amount of 'Information loss' to simulate the non-observation of connection relationships or fragments, respectively.</li>
+                      <li>Optionally, set an percentage of 'Information loss' to simulate the non-observation of connection relationships or fragments, respectively.</li>
                       <li> Set the number of simulated graphs to generate for each hypothesis, and click on the 'Run' button.</li>
                       </ul>
                     </p>
@@ -482,8 +563,9 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                            numericInput("seed", "Seed", value=NULL, min=1, max=50, width = "100%"),
                                                         ), #end span
                                                       ), #end column
-                                                      column(2,  uiOutput("parallelize.box"),
-                                                             style="padding:27px;"),
+                                                      # column(2, 
+                                                      #        uiOutput("parallelize.box"),
+                                                      #        style="padding:27px;"),
                                                       column(1, actionButton("goButton", "Run"), style="padding:27px;")
                                                   ), #end fluidrow
                                                   fluidRow( # .. plots----
@@ -497,7 +579,7 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                     h2("Cohesion by spatial unit"),
                                                     column(10, align="center",
                                                            HTML("<div style=width:40%;, align=left><p>
-                                                                Comparing cohesion values is the main purpose of the TSAR method. Because cohesion is a complex measurement combining multiple aspects, this is where differences between compared hypotheses might be more evident and useful for archaeological interpretation. For each hypothesis (top and bottom part of the chart), compare the cohesion values observed for each spatial unit on the empirical graph (purple and yellow vertical bars) and the simulated values (density curves and boxplots).
+                                                                Comparing cohesion values is the main purpose of the TSAR method. Because cohesion is a complex measurement combining multiple aspects, it is likely to reveal differences between compared hypotheses useful for archaeological interpretation. For each hypothesis (top and bottom part of the chart), compare the cohesion values observed for each spatial unit on the empirical graph (purple and yellow vertical bars) and the simulated values (purple and yellow density curves and boxplots).
                                                                 </p></div>")
                                                            )),
                                                   fluidRow(column(10,
@@ -510,7 +592,7 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                     h2("Admixture"),
                                                     column(10, align="center",
                                                            HTML("<div style=width:40%;, align=left><p>
-                                                                The admixture value summarises a pair of cohesion values. Less informative, it is nevertheless simpler and convenient to examine.
+                                                                The admixture value summarises a pair of cohesion values. Less informative than the cohesion values, it is nevertheless simpler and convenient to examine. In this chart, the grey and light grey density curves corresponds to the admixture values generated for 1 and 2 initial spatial units, respectively.
                                                                 </p></div>")
                                                     )),
                                                   fluidRow(column(10,
@@ -572,9 +654,9 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                           <ul>
                                                             <li>admixture</li>
                                                             <li>cohesion value for the spatial units 1 and 2</li> 
-                                                            <li>number of refitting relations</li>
+                                                            <li>number of refitting relationships</li>
                                                             <li>fragments balance</li>
-                                                            <li>summary statstics for the relationship weights (sum, median, and standard deviation)</li>
+                                                            <li>summary statstics about relationship weights (sum, median, and median absolute deviation)</li>
                                                                        </div>"),
                                                                   br(),
                                                                   HTML(paste("<div style=width:80%;, align=left>",
@@ -600,10 +682,10 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                                           <div  style=width:40%;, align=left>
                                                                           <h3>The problem</h3>
                                                                           <p>
-                                                                            Simulating a formation process from the <i>Deposition event</i> to the <i>Excavation event</i> requires making assumptions about the non-observed part of the archaeological information (due, for example, to the partial excavation of the site, transport of material objects to other places, information loss, etc.). Estimating missing information raises difficult issues because the range of possibilities is extensive,  leading to <a href=https://en.wikipedia.org/wiki/Combinatorial_explosion target=_blank>combinatorial explosions</a>. How many objects did this site originally included? How many fragments of this vessel are missing and not observed? </p>
+                                                                            Simulating a formation process from the <i>Deposition event</i> to the <i>Excavation event</i> requires making assumptions about the non-observed part of the archaeological information: i.e., the information not observed due, for example, to the partial excavation of the site,  the transport of material objects to other places, information loss, etc. Estimating missing information raises difficult issues because the range of possibilities is extensive,  leading to <a href=https://en.wikipedia.org/wiki/Combinatorial_explosion target=_blank>combinatorial explosions</a>. How many objects did this site originally included? How many fragments of this vessel are missing and not observed? </p>
                                                                             <h3>Origin Space Exploration</h3>
                                                                             <p>
-                                                                            Model exploration methods address those cases. In particular, the <a href=https://openmole.org/HDOSE.html target=_blank>High Dimension Origin Space Exploration</a> method (HDOSE) enables determining the possible combinations of a model's initial parameters, overcoming combinatorial explosions.  Conducting an HDOSE analysis requires defining:
+                                                                            Model exploration methods address those cases. In particular, the <a href=https://openmole.org/HDOSE.html target=_blank>High Dimension Origin Space Exploration</a> method (HDOSE) enables determining the possible combinations of a model's initial parameters, overcoming combinatorial explosions. Conducting an HDOSE analysis requires defining:
                                                                             <ol>
                                                                             <li> <b>Origin values</b>: the ranges of possible initial values for each parameter of the model. </li>
                                                                             <li> <b>Objective values</b>: the values corresponding to an observed state of a model (e.g. the values describing the state of the model at t<sub>0</sub>).</li>
@@ -611,7 +693,7 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                                             The HDOSE procedure returns the combinations of origin values that best generate the observed state (at t<sub>0</sub>) and, consequently, the most probable initial state(s) at t<sub>-2</sub>. Note that this approach requires to define the virtual total number of fragments and simulate the loss of part of it.
                                                                             </p>
                                                                             <p>
-                                                                            The HDOSE method is available from the <i><a href=https://openmole.org  target=_blank>openMOLE</a></i> software. 
+                                                                            The HDOSE method is implemented in the <i><a href=https://openmole.org  target=_blank>openMOLE</a></i> software. 
                                                                             </p>
                                                                             <h3>Instructions</h3>
                                                                             <p>
@@ -639,12 +721,12 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                                      ),
                                                                      fluidRow(
                                                                        column(1, 
-                                                                              span(`data-toggle` = "tooltip", `data-placement` = "top", title = "Minimal value for the range of values to explore about the number of initially non-fragmented objects to generate.",
+                                                                              span(`data-toggle` = "tooltip", `data-placement` = "top", title = "Minimal value for the range of values to explore about the number of initially non-fragmented objects to generate. By default: 50% of observed objects count.",
                                                                               uiOutput("OM.objectsNumber.min.ui")
                                                                               ) #end span
                                                                               ),
                                                                        column(1, 
-                                                                              span(`data-toggle` = "tooltip", `data-placement` = "top", title = "Maximal value for the range of values to explore about the number of initially non-fragmented objects to generate.",
+                                                                              span(`data-toggle` = "tooltip", `data-placement` = "top", title = "Maximal value for the range of values to explore about the number of initially non-fragmented objects to generate. By default: objects count * 10.",
                                                                               uiOutput("OM.objectsNumber.max.ui")
                                                                               ) #end span
                                                                               ),
@@ -660,19 +742,19 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                   ), #end fluidrow
                                                                      fluidRow(
                                                                        column(1, 
-                                                                              span(`data-toggle` = "tooltip", `data-placement` = "top", title = "Minimal value for the range of values to explore regarding the number of fragments to generate in total (including those not archaeologically observed).",
+                                                                              span(`data-toggle` = "tooltip", `data-placement` = "top", title = "Minimal value for the range of values to explore regarding the number of fragments to generate in total (including those not archaeologically observed). By default: observed fragment count.",
                                                                                    uiOutput("OM.fragmentsNumber.min.ui")
                                                                                 ) #end span
                                                                                ), #end column
                                                                        column(1, 
-                                                                              span(`data-toggle` = "tooltip", `data-placement` = "top", title = "Maximal value for the range of values to explore regarding the number of fragments to generate in total (including those not archaeologically observed).",
+                                                                              span(`data-toggle` = "tooltip", `data-placement` = "top", title = "Maximal value for the range of values to explore regarding the number of fragments to generate in total (including those not archaeologically observed). By default: observed fragment count * 100.",
                                                                               uiOutput("OM.fragmentsNumber.max.ui")
                                                                               ) #end span
                                                                               ),      
                                                                        column(2, 
                                                                               span(`data-toggle` = "tooltip", `data-placement` = "top",
-                                                                                   title = "Whether or not to try to preserve the fragments balance (i.e. proportion of fragments in each spatial units) when removing fragments to reach the targeted final fragment count.",
-                                                                                   selectInput("OM.preserveFragmentsBalance.val", "Preserve fragments balance", choices = c("true", "false", "true, false"), selected = "false", width = "100%")
+                                                                                   title = "Whether or not to try to preserve the fragments balance (i.e. proportion of fragments in each spatial units) when removing fragments to reach the targeted final fragment count. By default: active.",
+                                                                                   selectInput("OM.preserveFragmentsBalance.val", "Preserve fragments balance", choices = c("true", "false", "true, false"), selected = "true", width = "100%")
                                                                               ) # end span
                                                                        ), #end column                                                                     
                                                                        column(2,
@@ -730,11 +812,11 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                   fluidRow(column(10, h3("Relevance of spatial units"))),
                                                   fluidRow(
                                                     column(2, checkboxInput("OM.cohesion1Out", "Cohesion spatial unit 1", value = TRUE), style="padding-top:35px;"),
-                                                    column(2, sliderInput("OM.cohesion1Out.sens", "+/- tolerance", value = 0, min = 0, max = 0.25, step = 0.01)),
+                                                    column(2, sliderInput("OM.cohesion1Out.sens", "+/- tolerance", value = 0.05, min = 0, max = 0.25, step = 0.01)),
                                                      column(2, checkboxInput("OM.cohesion2Out", "Cohesion spatial unit 2", value = FALSE), style="padding-top:35px;"),
                                                      column(2, sliderInput("OM.cohesion2Out.sens", "+/- tolerance", value = 0, min = 0, max = 0.25, step = 0.01)),
                                                      column(1, checkboxInput("OM.admixtureOut", "Admixture", value = TRUE), style="padding-top:35px;"),
-                                                     column(2, sliderInput("OM.admixtureOut.sens", "+/- tolerance", value = 0, min = 0, max = 0.25, step = 0.01))
+                                                     column(2, sliderInput("OM.admixtureOut.sens", "+/- tolerance", value = 0, min = 0, max = 0.25, step = 0.001))
                                                      ),
                                                    fluidRow(column(10, h3("Entities count"))),
                                                    fluidRow(
@@ -743,7 +825,7 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                      column(1, checkboxInput("OM.objectCountOut", "Object count", value = TRUE), style="padding-top:35px;"),
                                                     column(2, 
                                                            span(`data-toggle` = "tooltip", `data-placement` = "top", title = "Using the final object count as a target value is a good way to get results similar to the archaeological observations. However, because constraining too much the value reduces drastically the accepted results in the HDOSE method, defining a loose constraint more likely generates useful results.",
-                                                           sliderInput("OM.objectCountOut.sens", "+/- tolerance (%)", value = 20, min = 0, max = 50, step = 1)),
+                                                           sliderInput("OM.objectCountOut.sens", "+/- tolerance (%)", value = 15, min = 0, max = 50, step = 1)),
                                                    )#end span
                                                      ),
                                                   fluidRow(column(10, h3("Alteration processes"))),
@@ -753,7 +835,7 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                     column(2, checkboxInput("OM.aggregFactorOut", "Fragments aggregation"), style="padding-top:35px;"),
                                                     column(2, sliderInput("OM.aggregFactorOut.sens", "+/- tolerance", value = 0, min = 0, max = 0.25, step = 0.01))
                                                     ), #end fluidrow
-                                                  fluidRow(column(10, h3("Distribution of materials in the two spatial units"))),
+                                                  fluidRow(column(10, h3("Distribution of the material in the two spatial units"))),
                                                    fluidRow(
                                                      column(2, checkboxInput("OM.objectsBalanceOut", "Objects balance"), style="padding-top:35px;"),
                                                      column(2, sliderInput("OM.objectsBalanceOut.sens", "+/- tolerance", value = 0, min = 0, max = 0.25, step = 0.01)),
@@ -798,10 +880,12 @@ ui <- shinyUI(fluidPage(  # UI ----
                                                    column(10, align="center",
                                                           tags$div(
                                                             HTML("<div style=width:40%;, align=left>
-                <h2>About <i>archeofrag</i></h2>
+                <h2>About <i>archeofrag</i>(<i>.gui</i>)</h2>
                 <p>
                 To cite <i>archeofrag</i> or <i>archeofrag.gui</i>, please use <b>Plutniak 2022a</b>. 
                 <ul>
+                  <li><b>Plutniak, S. 2025b</b>. '<a href=https://hal.archives-ouvertes.fr/hal-05352218 target=_blank>L'analyse topologique des remontages archeologiques : la methode TSAR et le package R archeofrag</a>', <i>BSPF</i>, 122 (3), p. 489-493.</li>
+                 <li><b>Plutniak, S. 2025a</b>. 'Making advanced archaeological refitting and spatial analysis easy: the archeofrag open-source software tools', 10th World Archaeological Congress, Darwin (Australia). hal: <a href=https://hal.science/hal-05148935v1 target=_blank>hal-05148935</a>.</li>
                   <li><b>Plutniak, S. 2022a</b>. 'Archeofrag: an R package for Refitting and Spatial Analysis in Archaeology', <i>Journal of Open Source Software</i>, 7 (75), p. 4335. doi: <a href=https://doi.org/10.21105/joss.04335 target=_blank>10.21105/joss.04335</a>.</li>
                   <li><b>Plutniak, S. 2022b</b>. '<a href=https://rzine.gitpages.huma-num.fr/site/ressources/20220811_archeofrag_joss/ target=_blank>Archeofrag: un package R pour les remontages et l'analyse spatiale en archeologie</a>', <i>Rzine</i>.</li>
                 </ul>
@@ -817,14 +901,19 @@ ui <- shinyUI(fluidPage(  # UI ----
                 </p>
                 <h2>Datasets</h2> 
                 <ul>
-                  <li><b>Bout des Vergnes</b>:  Ihuel, E. (dir.),  M. Baillet, A. Barbeyron, M. Brenet, H. Camus, E. Claud, N. Mercier., A. Michel, F. Sellami. 2020. <i>Le Bout des Vergnes, Bergerac (Dordogne, Nouvelle-Aquitaine), Contournement ouest de Bergerac, RD 709</i>, Excavation report, Perigueux. </li>
+                  <li><b>Bout des Vergnes</b>:  Ihuel, E. (dir.),  M. Baillet, A. Barbeyron, M. Brenet, H. Camus, E. Claud, N. Mercier, A. Michel, F. Sellami. 2020. <i>Le Bout des Vergnes, Bergerac (Dordogne, Nouvelle-Aquitaine), Contournement ouest de Bergerac, RD 709</i>, Excavation report, Perigueux. </li>
                   <li><b>Chauzeys</b>: Chadelle J.-P. (dir.),  M. Baillet, A. Barbeyron, M. Brenet, H. Camus, E. Claud, F. Jude, S. Kreutzer, A. Michel,  N. Mercier, M. Rabanit, S. Save, F. Sellami, A. Vaughan-Williams. 2021. <i>Chauzeys, Saint-Medard-de-Mussidan (Dordogne, Nouvelle-Aquitaine)</i>, Excavation report, Perigueux. </li>
-                   <li><b>Cuzoul</b>:  Gardeur M. 2025. 'Bone refits from the Cuzoul de Gramat Mesolithic layers (archaeological site, France)', <i>Zenodo</i>, doi: <a href=https://doi.org/10.5281/zenodo.14975910 target=_blank>10.5281/zenodo.14975910</a>.</li>
+                  <li><b>Cuzoul</b>:  Gardeur M. 2025. 'Bone refits from the Cuzoul de Gramat Mesolithic layers (archaeological site, France)', <i>Zenodo</i>, doi: <a href=https://doi.org/10.5281/zenodo.14975910 target=_blank>10.5281/zenodo.14975910</a>.</li>
                   <li><b>Eaton</b>: Engelbrecht W. 2014. 'Madison Point Refits', <i>tDAR</i>, doi: <a href=https://doi.org/10.6067/xcv8t43v1j target=_blank>10.6067/xcv8t43v1j</a>. See also Plutniak S. 2025. 'Reprocessing script for William Engelbrecht's 'Madison Point Refits' dataset (including generated tables and figures)'. <i>Zenodo</i>. doi: <a href=https://doi.org/10.5281/zenodo.15091301 target=_blank>10.5281/zenodo.15091301</a>.</li>  
                   <li><b>Font-Juvenal</b>: Caro J. 2024. 'Font-Juvenal_Refiting', <i>Zenodo</i>, doi:  <a href=https://doi.org/10.5281/zenodo.14515444 target=_blank>10.5281/zenodo.14515444</a>.</li>  
-                  <li><b>Fumane</b>: Falcucci A. 2025. 'Refitting the context: accepted paper b (v0.1.3)', <i>Zenodo</i>, doi: <a href=https://doi.org/10.5281/zenodo.15017627   target=_blank>10.5281/zenodo.15017627</a>.</li>      
-                  <li><b>Grande Rivoire</b>: Angelin A. 2025. 'Refitting data from La Grande Rivoire prehistoric site', <i>Zenodo</i>, doi: <a href=https://doi.org/10.5281/zenodo.14609875 target=_blank>10.5281/zenodo.14609875</a>.</li>
-                  <li><b>Liang Abu</b>: Plutniak S. 2021. 'Refitting Pottery Fragments from the Liang Abu Rockshelter, Borneo', <i>Zenodo</i>, doi: <a href=https://doi.org/10.5281/zenodo.4719577 target=_blank>10.5281/zenodo.4719577</a> </li>
+                  <li><b>Fumane</b>: Falcucci A. 2025. 'Refitting the context: accepted paper b (v0.1.3)', <i>Zenodo</i>, doi: <a href=https://doi.org/10.5281/zenodo.15017627   target=_blank>10.5281/zenodo.15017627</a>.</li> 
+                  <li><b>Geelbek</b>: Conard N. J.,  A. W. Kandel,  S. Plutniak. 2025. 'Refitting archaeological objects from the Geelbek Dunes Middle and Later Stone Age site (South Africa)', <i>Zenodo</i>, doi: <a href=https://doi.org/10.5281/zenodo.15803288 target=_blank>10.5281/zenodo.15803288</a>.</li>
+                  <li><b>Grande Rivoire 1st Meso</b>: Derbord L., A. Angelin. 2025. 'Mesolithic artefact refitting data from La Grande Rivoire (Sassenage, Isere)', <i>Zenodo</i>, doi: <a href=https://doi.org/10.5281/zenodo.15289796 target=_blank>10.5281/zenodo.15289796</a>.</li>
+                  <li><b>Grande Rivoire 2nd Meso</b>: Derbord L., A. Angelin. 2025. 'Mesolithic artefact refitting data from La Grande Rivoire (Sassenage, Isere)', <i>Zenodo</i>, doi: <a href=https://doi.org/10.5281/zenodo.15289796 target=_blank>10.5281/zenodo.15289796</a>.</li>
+                  <li><b>Grotte 16</b>: Dancette C., E. Discamps, S. Plutniak. 2025. 'Bone refits from the Grotte XVI Pleistocene Faunal Assemblage (Cenac-et-Saint-Julien, France)', <i>Zenodo</i>, doi: <a href=https://doi.org/10.5281/zenodo.15655628 target=_blank>10.5281/zenodo.15655628</a>.</li>
+                  <li><b>Liang Abu</b>: Plutniak S. 2021. 'Refitting Pottery Fragments from the Liang Abu Rockshelter, Borneo', <i>Zenodo</i>, doi: <a href=https://doi.org/10.5281/zenodo.4719577 target=_blank>10.5281/zenodo.4719577</a>.</li>
+                  <li><b>St Cesaire 1987</b>: Morin E., S. Plutniak. 2025. 'Middle and Upper Palaeolithic Bone Refitting data from La Roche a Pierrot site (Saint-Cesaire, France), Excavations 1976-1987', <i>Zenodo</i>, doi: <a href=https://doi.org/10.5281/zenodo.15638561 target=_blank>10.5281/zenodo.15638561</a>.</li>
+                  <li><b>St Cesaire 2024</b>: Morin E., S. Plutniak. 2025. 'Middle and Upper Palaeolithic Bone Refitting data from La Roche a Pierrot site (Saint-Cesaire, France), Excavations 2013-2024', <i>Zenodo</i>, doi: <a href=https://doi.org/10.5281/zenodo.15638691 target=_blank>10.5281/zenodo.15638691</a>.</li>
                   <li><b>Tai Cave and Tai South</b>:  Caro J., Plutniak S. 2022. 'Refitting and Matching Neolithic Pottery Fragments from the Tai site, France', <i>Zenodo</i>, doi: <a href=https://doi.org/10.5281/zenodo.7408706 target=_blank>10.5281/zenodo.7408706</a>.</li>
                 </ul>
                 <br>

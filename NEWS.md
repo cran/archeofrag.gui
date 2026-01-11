@@ -1,5 +1,31 @@
 
+
+# archeofrag.gui 1.1.4
+
+* In 'Spatial units optimisation', add mean and standard deviation for admixture. 
+* Fix 'generate.rubish()' according to the new 'igraph' constraint on vertices name type.
+* Fix error in spatial units ranking when parallelization isn't used.
+* Add the `n.cores` parameter to control the number of cores to register for parallelization.
+
+# archeofrag.gui 1.1.3
+
+* Replace the admixture table in 'Measurements' tab by a dissimilarity matrix and add a download button. Add Baker's Gamme index. Improve entanglement computation.
+* In the 'Measurements' tab, add new function to rank the spatial units based on their relative cohesion values.   
+* Small changes in the openMOLE code generator. 
+
+# archeofrag.gui 1.1.2
+Released: 2025-05-27
+
+* In the 'Spatial units optimisation' tab, the code has been optimised (including the use of the heap permutation algorithm) and the maximum number of spatial units to merge is set to 8 (versus 7 before).
+
+# archeofrag.gui 1.1.1
+Released: 2025-05-12
+
+* In the 'Measurements' tab, the simple dendrogram is replaced by a tanglegram. Entanglement and cophenetic correlation are reported.
+* A variable and its values can be optionally selected to subset the dataset.
+
 # archeofrag.gui 1.1.0
+Released: 2025-04-10
 
 * Add R session information in 'R code' tab. 
 * Display information about embedded datasets in 'Measurements' tab.
