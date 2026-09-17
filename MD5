@@ -1,10 +1,12 @@
-577df6175f59ad78b51ea2cba016aefc *DESCRIPTION
-d51f3641e0437761846a8c65eba24401 *NAMESPACE
-0a555ad4fb9aa2504d9a4a911849f288 *NEWS.md
-86d70243b0976f330eee92ac1fa67eaf *R/app_server.R
-9278d4c0530e8b44d9f8b17999fddf76 *R/app_ui.R
+cae6ab24e2aea37556fb33af2bf70c5d *DESCRIPTION
+f6428dfcc3d2c7b2e0049704fc8c1011 *NAMESPACE
+5439eb1a3a7612919f8f569cd6773b71 *NEWS.md
+ee46e8952f06887e5979430f7ef6a060 *R/app_server.R
+44bfd3cc0d976a9f1dfe4020203c683b *R/app_ui.R
 c94ca4836dcae387aae48436b452ca7b *R/archeofrag.gui.R
+c3a586a1b56b6390019cbeb025a23be8 *R/check_weighting_variable.R
 8f59c24f89fcdc846795683aea0d94a5 *R/heap_permutation.R
+50d7e794dea97e6e94ec60db30ebec10 *R/make_rubish_data.R
 b5ffe115ea931570cd28cf0becd83660 *inst/CITATION
 c01020dc09286d75d7d60a6e33df788f *inst/www/general-idea.png
 e55a047292c47ad980ab999e791f5520 *inst/www/timeline-simulation.png
